@@ -284,10 +284,10 @@ export interface HiveConfig {
     /** Include modified files (default: false) */
     includeModifiedFiles?: boolean;
   };
-  /** Snip integration - prefix shell commands with snip to reduce token usage */
-  snip?: {
+  /** RTK integration - prefix shell commands with RTK to reduce token usage */
+  rtk?: {
     enabled?: boolean;
-    /** Custom snip path (default: 'snip') */
+    /** Custom RTK path (default: 'rtk') */
     command?: string;
   };
   /** Agent Booster - Ultra-fast code editing (Rust+WASM, 52x faster than Morph, FREE) */
@@ -468,10 +468,10 @@ export const DEFAULT_HIVE_CONFIG: HiveConfig = {
     includePendingTasks: true,
     includeModifiedFiles: false,
   },
-  // Snip: reduce token usage for shell commands (requires snip CLI installed)
-  snip: {
-    enabled: false,  // Disabled by default, requires snip CLI
-    command: 'snip',
+  // RTK: reduce token usage for shell commands (requires RTK CLI installed)
+  rtk: {
+    enabled: false,  // Disabled by default, requires RTK CLI
+    command: 'rtk',
   },
   // Agent Booster: Ultra-fast code editing (52x faster, FREE)
   agentBooster: {

@@ -47,7 +47,8 @@
     "hive_booster_status",
     "hive_vector_search",
     "hive_vector_add",
-    "hive_vector_status"
+    "hive_vector_status",
+    "gitingest"
   ],
   "agents": [
     "zetta",
@@ -68,7 +69,8 @@
   "mcp": [
     "websearch",
     "context7",
-    "grep_app"
+    "grep_app",
+    "codegraph"
   ],
   "hooks": [
     "hive.todo-enforcer",

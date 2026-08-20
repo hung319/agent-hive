@@ -82,6 +82,9 @@ import {
   callGraphExtractTool,
 } from './tools/call-graph.js';
 
+// Gitingest Tool (GitHub repo content extraction)
+import { gitingestTool } from './tools/gitingest-tool.js';
+
 // Bee agents (lean, focused)
 import { QUEEN_BEE_PROMPT } from './agents/hive.js';
 import { SCOUT_BEE_PROMPT } from './agents/scout.js';
@@ -92,9 +95,10 @@ import { CODEBASE_LOCATOR_PROMPT } from './agents/codebase-locator.js';
 import { CODEBASE_ANALYZER_PROMPT } from './agents/codebase-analyzer.js';
 import { buildCustomSubagents } from './agents/custom-agents.js';
 import { createBuiltinMcps } from './mcp/index.js';
-import { ensureSnipInstalled, isSnipOnPath } from './utils/snip-installer.js';
+import { ensureRtkInstalled, isRtkOnPath } from './utils/rtk-installer.js';
 import { ensureToolsInstalled, getHiveBinPath } from './utils/tool-installer.js';
 import { ensureHivePathInShellConfig } from './utils/shell-path.js';
+import { ensureCodegraphInit } from './utils/codegraph-init.js';
 // $ns Mode & Session Continuation hooks
 import { createNsModeState, detectNsMode, getNsDirective } from './hooks/ns-mode.js';
 import { createContinuationState, getPendingTaskCount, buildContinuationContext } from './hooks/session-continuation.js';
@@ -257,19 +261,19 @@ type ToolContext = {
 };
 
 // ============================================================================
-// Snip Integration
-// Prefix shell commands with snip to reduce 60-90% token usage
-// Snip: https://github.com/edouard-claude/snip
+// RTK Integration
+// Prefix shell commands with RTK to reduce 60-90% token usage
+// RTK: https://github.com/rtk-ai/rtk
 // ============================================================================
 
 const ENV_VAR_RE = /^([A-Za-z_][A-Za-z0-9_]*=[^\s]* +)*/;
 
 /**
- * Prefix a command with snip to reduce output token usage
+ * Prefix a command with RTK to reduce output token usage
  */
-function prefixWithSnip(command: string, snipCommand = 'snip'): string {
-  // Don't double-prefix already snipped commands
-  if (command.startsWith(`${snipCommand} `)) {
+function prefixWithRtk(command: string, rtkCommand = 'rtk'): string {
+  // Don't double-prefix already rtk'd commands
+  if (command.startsWith(`${rtkCommand} `)) {
     return command;
   }
 
@@ -282,11 +286,11 @@ function prefixWithSnip(command: string, snipCommand = 'snip'): string {
   const envPrefix = (firstPart.match(ENV_VAR_RE) ?? [''])[0];
   const bareCmd = firstPart.slice(envPrefix.length).trim();
 
-  return `${envPrefix}${snipCommand} ${bareCmd}${rest}`;
+  return `${envPrefix}${rtkCommand} ${bareCmd}${rest}`;
 }
 
-// Auto-install snip + tools on plugin load (fire-and-forget, completes before first hook fires)
-const snipBootPromise = ensureSnipInstalled();
+// Auto-install RTK + tools on plugin load (fire-and-forget, completes before first hook fires)
+const rtkBootPromise = ensureRtkInstalled();
 const toolsBootPromise = ensureToolsInstalled();
 
 // Proactively install LSP servers for common languages (fire-and-forget, non-blocking)
@@ -405,6 +409,11 @@ const plugin: Plugin = async (ctx) => {
   if (pathResult.added.length > 0) {
     console.log(`[hive:shell-path] Added PATH to: ${pathResult.added.join(', ')}`);
   }
+
+  // Auto-init codegraph if available (fire-and-forget, non-blocking)
+  ensureCodegraphInit(directory).catch((err) => {
+    console.warn('[hive:codegraph] Auto-init failed:', err.message);
+  });
 
   const featureService = new FeatureService(directory);
   const planService = new PlanService(directory);
@@ -1494,14 +1503,14 @@ ${snapshot}
         }
 
         try {
-          const snipConfig = configService.get().snip;
-          const snipBinary = await snipBootPromise;
-          const snipAvailable = snipBinary !== '';
-          const isSnipEnabled = snipConfig?.enabled ?? snipAvailable;
-          const snipCmd = snipConfig?.command || (snipBinary || 'snip');
+          const rtkConfig = configService.get().rtk;
+          const rtkBinary = await rtkBootPromise;
+          const rtkAvailable = rtkBinary !== '';
+          const isRtkEnabled = rtkConfig?.enabled ?? rtkAvailable;
+          const rtkCmd = rtkConfig?.command || (rtkBinary || 'rtk');
           let finalCommand = command;
-          if (isSnipEnabled && snipAvailable) {
-            finalCommand = prefixWithSnip(command, snipCmd);
+          if (isRtkEnabled && rtkAvailable) {
+            finalCommand = prefixWithRtk(command, rtkCmd);
           }
           // PATH is now set in shell config (~/.bashrc, ~/.zshrc, etc.)
           // by ensureHivePathInShellConfig() on plugin init
@@ -1638,6 +1647,9 @@ ${snapshot}
       call_graph_callers: callGraphCallersTool,
       call_graph_path: callGraphPathTool,
       call_graph_extract: callGraphExtractTool,
+
+      // Gitingest Tool (GitHub repo content extraction)
+      gitingest: gitingestTool,
 
       hive_skill: createHiveSkillTool(filteredSkills),
 
@@ -2666,8 +2678,7 @@ Expand your Discovery section and try again.`;
 | websearch | websearch_web_search_exa | Current web info |
 | context7 | context7_query-docs, context7_resolve-library-id | Library docs |
 | grep_app | grep_app_searchGitHub | GitHub code patterns |
-| repomix | pack_codebase, pack_remote_repository | Repo packing |
-| ast_grep | ast_grep_find_code, ast_grep_rewrite_code | AST code analysis |
+| codegraph | codegraph_explore | Semantic code intelligence (requires \`codegraph init\`) |
 Use these tools when the task matches their purpose. They are available as regular tools.`;
       for (const agentConfig of Object.values(allAgents)) {
         if (agentConfig && typeof agentConfig === 'object') {

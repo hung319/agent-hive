@@ -2,7 +2,7 @@
   "name": "@hung319/opencode-hive",
   "version": "1.19.0",
   "type": "module",
-  "description": "OpenCode plugin for Agent Hive - from vibe coding to hive coding",
+  "description": "OpenCode plugin for Agent Hive - 6 agents, 17 tools, 14 skills",
   "license": "MIT WITH Commons-Clause",
   "author": "hung319",
   "repository": {

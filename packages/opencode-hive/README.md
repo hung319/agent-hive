@@ -20,7 +20,7 @@ Add `@hung319/opencode-hive` to your `opencode.json`:
 That's it. On first load, Hive auto-installs:
 - **Agent Tools**: `@sparkleideas/agent-booster` (52x faster code editing), `@sparkleideas/memory` (vector memory)
 - **CLI Tools**: `dora` (SCIP code navigation), `auto-cr-cmd` (automated code review), `btca` (Bluetooth Classic Audio)
-- **Snip binary**: 60-90% token reduction by filtering shell output
+- **RTK binary**: 60-90% token reduction by filtering shell output (100+ hand-tuned command filters)
 
 All tools fall back gracefully if installation fails — nothing breaks.
 
@@ -105,6 +105,9 @@ Omitted fields (`model`, `variant`, `temperature`) inherit from the base agent. 
 | `code-reviewer` | Review changes against plan |
 | `verification-before-completion` | Verify before claiming done |
 | `docker-mastery` | Docker container debugging and optimization |
+| `caveman` | Terse output - shorter responses, same meaning, fewer tokens |
+| `skill-creator` | Guide through creating new skills |
+| `ponytail` | Lazy senior dev philosophy - write only what's truly needed |
 
 **Per-agent filtering:** `{ "agents": { "forager-worker": { "skills": ["tdd", "verification-before-completion"] } } }`
 

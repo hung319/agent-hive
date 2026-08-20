@@ -35,7 +35,7 @@ Add `@hung319/opencode-hive` to your `opencode.json`:
 }
 ```
 
-OpenCode handles the rest — no manual install needed. On first load, Hive auto-installs all dependencies (snip binary for token reduction, agent-booster for fast editing, CLI tools for code navigation).
+OpenCode handles the rest — no manual install needed. On first load, Hive auto-installs all dependencies (RTK binary for token reduction, agent-booster for fast editing, CLI tools for code navigation).
 
 ## The Workflow
 
@@ -65,6 +65,8 @@ Auto-generated at `~/.config/opencode/agent_hive.json` after first run:
 | `agentMode` | `unified`, `dedicated` | Single agent or separate planner + orchestrator |
 | `disableSkills` | `string[]` | Globally disable skills |
 | `disableMcps` | `string[]` | Globally disable MCP servers |
+
+**Skills:** `brainstorming`, `writing-plans`, `executing-plans`, `dispatching-parallel-agents`, `test-driven-development`, `systematic-debugging`, `code-reviewer`, `verification-before-completion`, `docker-mastery`, `caveman`, `skill-creator`, `parallel-exploration`, `ask-questions-if-underspecified`, `agents-md-mastery`, `ponytail`
 
 ---
 

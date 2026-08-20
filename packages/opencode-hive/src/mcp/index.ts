@@ -2,7 +2,7 @@ import type { McpConfig } from './types';
 import { websearchMcp } from './websearch';
 import { context7Mcp } from './context7';
 import { grepAppMcp } from './grep-app';
-import { repomixMcp } from './repomix';
+import { codegraphMcp } from './codegraph';
 
 /**
  * Built-in MCP configurations
@@ -11,9 +11,11 @@ import { repomixMcp } from './repomix';
  * - websearch: Remote (Exa AI) - supports EXA_API_KEY env var
  * - context7: Remote (Context7) - supports CONTEXT7_API_KEY env var
  * - grep_app: Remote (GitHub code search)
- * - repomix: Local (npx) - packs repos for AI analysis via repomix --mcp
  * 
- * Note: ast_grep is registered as native tools (not MCP) — see src/tools/ast-grep.ts
+ * Local MCPs:
+ * - codegraph: Pre-indexed code knowledge graph (requires `codegraph init` per project)
+ * 
+ * Note: ast_grep and gitingest are registered as native tools (not MCP)
  */
 
 const allBuiltinMcps: Record<string, McpConfig> = {
@@ -22,7 +24,7 @@ const allBuiltinMcps: Record<string, McpConfig> = {
   context7: context7Mcp,
   grep_app: grepAppMcp,
   // Local MCPs
-  repomix: repomixMcp,
+  codegraph: codegraphMcp,
 };
 
 // Lazy initialization - MCPs are only resolved when first accessed

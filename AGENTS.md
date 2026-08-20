@@ -88,7 +88,7 @@ packages/
 ├── opencode-hive/       # OpenCode plugin
 │   └── src/
 │       ├── agents/      # scout, swarm, hive, architect, forager, hygienic
-│   ├── mcp/         # websearch, openserp, grep-app, context7, repomix, ast-grep
+│       ├── mcp/         # websearch, context7, grep-app, codegraph, gitingest
 │       ├── tools/       # Hive tool implementations
 │       ├── hooks/       # Event hooks
 │       └── skills/      # Skill definitions
