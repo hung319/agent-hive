@@ -1,4 +1,4 @@
-import { describe, expect, it, spyOn, afterEach, mock } from 'bun:test';
+import { describe, expect, it, spyOn, beforeEach, afterEach, afterAll, mock } from 'bun:test';
 import { ConfigService } from 'hive-core';
 import * as path from 'path';
 import plugin from '../index';
@@ -65,8 +65,15 @@ type AgentConfig = {
 };
 
 describe('Agent permissions', () => {
+  let originalHiveDisable: string | undefined;
+  beforeEach(() => {
+    originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
+    process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
+  });
   afterEach(() => {
     mock.restore();
+    if (originalHiveDisable === undefined) delete process.env.HIVE_DISABLE_AUTO_INSTALL;
+    else process.env.HIVE_DISABLE_AUTO_INSTALL = originalHiveDisable;
   });
 
   it('registers zetta, scout, forager, and hygienic in unified mode', async () => {
@@ -235,8 +242,15 @@ describe('Agent permissions', () => {
 });
 
 describe('Per-agent tool filtering', () => {
+  let originalHiveDisable2: string | undefined;
+  beforeEach(() => {
+    originalHiveDisable2 = process.env.HIVE_DISABLE_AUTO_INSTALL;
+    process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
+  });
   afterEach(() => {
     mock.restore();
+    if (originalHiveDisable2 === undefined) delete process.env.HIVE_DISABLE_AUTO_INSTALL;
+    else process.env.HIVE_DISABLE_AUTO_INSTALL = originalHiveDisable2;
   });
 
   async function buildConfig(agentMode: string) {
