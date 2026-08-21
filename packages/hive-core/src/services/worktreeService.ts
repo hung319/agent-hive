@@ -88,7 +88,20 @@ export class WorktreeService {
 
     await fs.mkdir(path.dirname(worktreePath), { recursive: true });
 
-    const base = baseBranch || (await git.revparse(["HEAD"])).trim();
+    let base: string;
+    if (baseBranch) {
+      base = baseBranch;
+    } else {
+      try {
+        base = (await git.revparse(["HEAD"])).trim();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `Failed to resolve HEAD in ${this.config.baseDir}: ${msg}. ` +
+          `Ensure this directory is a valid git repository with at least one commit.`
+        );
+      }
+    }
 
     const existing = await this.get(feature, step);
     if (existing) {
