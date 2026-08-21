@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { execSync } from "child_process";
 import * as fs from "fs";
+
+function execSync(cmd: string, opts: { cwd: string }): void {
+  const parts = cmd.match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
+  const clean = parts.map(p => p.replace(/^"|"$/g, ''));
+  const result = Bun.spawnSync(clean, { cwd: opts.cwd, stdout: "inherit", stderr: "inherit" });
+  if (result.exitCode !== 0) {
+    throw new Error(`Command failed: ${cmd} exit ${result.exitCode}`);
+  }
+}
 import * as path from "path";
 import type { PluginInput } from "@opencode-ai/plugin";
 import { createOpencodeClient } from "@opencode-ai/sdk";

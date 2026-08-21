@@ -96,6 +96,16 @@ export class WorktreeService {
         base = (await git.revparse(["HEAD"])).trim();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
+        try {
+          const fsSync = await import("fs");
+          const gitDirExists = fsSync.existsSync(path.join(this.config.baseDir, ".git"));
+          const dirEntries = fsSync.existsSync(this.config.baseDir)
+            ? fsSync.readdirSync(this.config.baseDir).join(", ")
+            : "DIR_NOT_FOUND";
+          console.error(
+            `[DIAG] baseDir=${this.config.baseDir} gitDirExists=${gitDirExists} entries=${dirEntries} cwd=${process.cwd()} home=${process.env.HOME} err=${msg}`
+          );
+        } catch {}
         throw new Error(
           `Failed to resolve HEAD in ${this.config.baseDir}: ${msg}. ` +
           `Ensure this directory is a valid git repository with at least one commit.`

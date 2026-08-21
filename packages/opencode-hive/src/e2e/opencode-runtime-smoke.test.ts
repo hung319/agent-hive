@@ -2,6 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "fs";
 import * as path from "path";
 import { createServer } from "net";
+
+function execSync(cmd: string, opts: { cwd: string }): void {
+  const parts = cmd.match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
+  const clean = parts.map(p => p.replace(/^"|"$/g, ''));
+  const result = Bun.spawnSync(clean, { cwd: opts.cwd, stdout: "inherit", stderr: "inherit" });
+  if (result.exitCode !== 0) throw new Error(`Command failed: ${cmd}`);
+}
 import {
   createOpencodeClient,
   createOpencodeServer,
@@ -404,7 +411,6 @@ describe("e2e: Forager compaction loop mitigation (in-process)", () => {
   });
 
   it("system transform does not reintroduce broad startup instruction after compaction", async () => {
-    const { execSync } = await import("child_process");
     const { createOpencodeClient: mkClient } = await import("@opencode-ai/sdk");
     const OPENCODE_CLIENT = mkClient({ baseUrl: "http://localhost:1" }) as unknown as PluginInput["client"];
 
@@ -431,7 +437,6 @@ describe("e2e: Forager compaction loop mitigation (in-process)", () => {
   });
 
   it("compacted forager flow reaches commit-capable step without hive_status stall", async () => {
-    const { execSync } = await import("child_process");
     const { createOpencodeClient: mkClient } = await import("@opencode-ai/sdk");
     const OPENCODE_CLIENT = mkClient({ baseUrl: "http://localhost:1" }) as unknown as PluginInput["client"];
 
@@ -498,7 +503,6 @@ Test compaction resume flow.
   });
 
   it("compaction hook output appended to session context does not contain hive_status", async () => {
-    const { execSync } = await import("child_process");
     const { createOpencodeClient: mkClient } = await import("@opencode-ai/sdk");
     const OPENCODE_CLIENT = mkClient({ baseUrl: "http://localhost:1" }) as unknown as PluginInput["client"];
 
