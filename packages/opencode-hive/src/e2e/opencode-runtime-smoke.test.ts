@@ -371,21 +371,27 @@ function createStubShellForLoop(): PluginInput["$"] {
 describe("e2e: Forager compaction loop mitigation (in-process)", () => {
   let testRoot: string;
   let originalHome: string | undefined;
+  let originalHiveDisable: string | undefined;
 
   beforeEach(() => {
     originalHome = process.env.HOME;
-    fs.rmSync(TEST_ROOT_BASE_LOOP, { recursive: true, force: true });
-    fs.mkdirSync(TEST_ROOT_BASE_LOOP, { recursive: true });
-    testRoot = fs.mkdtempSync(path.join(TEST_ROOT_BASE_LOOP, "project-"));
+    originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
+    process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
+    testRoot = fs.mkdtempSync(path.join("/tmp", "hive-e2e-loop-"));
     process.env.HOME = testRoot;
   });
 
   afterEach(() => {
-    fs.rmSync(TEST_ROOT_BASE_LOOP, { recursive: true, force: true });
+    fs.rmSync(testRoot, { recursive: true, force: true });
     if (originalHome === undefined) {
       delete process.env.HOME;
     } else {
       process.env.HOME = originalHome;
+    }
+    if (originalHiveDisable === undefined) {
+      delete process.env.HIVE_DISABLE_AUTO_INSTALL;
+    } else {
+      process.env.HIVE_DISABLE_AUTO_INSTALL = originalHiveDisable;
     }
   });
 

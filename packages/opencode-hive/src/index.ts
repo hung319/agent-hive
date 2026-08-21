@@ -289,12 +289,22 @@ function prefixWithRtk(command: string, rtkCommand = 'rtk'): string {
   return `${envPrefix}${rtkCommand} ${bareCmd}${rest}`;
 }
 
-// Auto-install RTK + tools on plugin load (fire-and-forget, completes before first hook fires)
-const rtkBootPromise = ensureRtkInstalled();
-const toolsBootPromise = ensureToolsInstalled();
+let rtkBootPromise: Promise<string> | null = null;
+let toolsBootPromise: Promise<{ installed: string[]; failed: string[] }> | null = null;
+let lspBootPromise: Promise<import('./services/lsp-autoinstall.js').LspServerResult[]> | null = null;
 
-// Proactively install LSP servers for common languages (fire-and-forget, non-blocking)
-const lspBootPromise = ensureLspServers();
+function getRtkBootPromise(): Promise<string> {
+  if (!rtkBootPromise) rtkBootPromise = ensureRtkInstalled();
+  return rtkBootPromise;
+}
+function getToolsBootPromise(): Promise<{ installed: string[]; failed: string[] }> {
+  if (!toolsBootPromise) toolsBootPromise = ensureToolsInstalled();
+  return toolsBootPromise;
+}
+function getLspBootPromise(): Promise<import('./services/lsp-autoinstall.js').LspServerResult[]> {
+  if (!lspBootPromise) lspBootPromise = ensureLspServers();
+  return lspBootPromise;
+}
 
 /**
  * Ensure .hive/ is in .gitignore. Called on every plugin init.
@@ -409,6 +419,10 @@ const plugin: Plugin = async (ctx) => {
   if (pathResult.added.length > 0) {
     console.log(`[hive:shell-path] Added PATH to: ${pathResult.added.join(', ')}`);
   }
+
+  void getRtkBootPromise().catch(() => {});
+  void getToolsBootPromise().catch(() => {});
+  void getLspBootPromise().catch(() => {});
 
   // Auto-init codegraph if available (fire-and-forget, non-blocking)
   ensureCodegraphInit(directory).catch((err) => {

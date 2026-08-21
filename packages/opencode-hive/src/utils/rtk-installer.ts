@@ -71,12 +71,25 @@ async function getLatestVersion(): Promise<string> {
   return data.tag_name.replace(/^v/, '');
 }
 
+function shouldSkipRtkInstall(): boolean {
+  return (
+    process.env.HIVE_DISABLE_AUTO_INSTALL === '1' ||
+    process.env.HIVE_DISABLE_AUTO_INSTALL === 'true' ||
+    process.env.NODE_ENV === 'test' ||
+    !!process.env.BUN_TEST ||
+    (process.env.HOME !== undefined && process.env.HOME.includes('hive-e2e'))
+  );
+}
+
 /**
  * Ensure RTK binary is installed.
  * Downloads from GitHub releases if not present.
  * Falls back to 'rtk' (PATH lookup) if installation fails.
  */
 export async function ensureRtkInstalled(): Promise<string> {
+  if (shouldSkipRtkInstall()) {
+    return getRtkBinaryPath();
+  }
   const binaryPath = getRtkBinaryPath();
 
   if (isRtkInstalled()) {

@@ -88,14 +88,15 @@ function createProject(worktree: string): PluginInput["project"] {
 describe("e2e: opencode-hive plugin (in-process)", () => {
   let testRoot: string;
   let originalHome: string | undefined;
+  let originalHiveDisable: string | undefined;
 
   beforeEach(() => {
     originalHome = process.env.HOME;
-    fs.rmSync(TEST_ROOT_BASE, { recursive: true, force: true });
-    fs.mkdirSync(TEST_ROOT_BASE, { recursive: true });
-    testRoot = fs.mkdtempSync(path.join(TEST_ROOT_BASE, "project-"));
+    originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
+    process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
+    testRoot = fs.mkdtempSync(path.join("/tmp", "hive-e2e-plugin-"));
     process.env.HOME = testRoot;
-    
+
     execSync("git init", { cwd: testRoot });
     execSync('git config user.email "test@example.com"', { cwd: testRoot });
     execSync('git config user.name "Test"', { cwd: testRoot });
@@ -105,11 +106,16 @@ describe("e2e: opencode-hive plugin (in-process)", () => {
   });
 
   afterEach(() => {
-    fs.rmSync(TEST_ROOT_BASE, { recursive: true, force: true });
+    fs.rmSync(testRoot, { recursive: true, force: true });
     if (originalHome === undefined) {
       delete process.env.HOME;
     } else {
       process.env.HOME = originalHome;
+    }
+    if (originalHiveDisable === undefined) {
+      delete process.env.HIVE_DISABLE_AUTO_INSTALL;
+    } else {
+      process.env.HIVE_DISABLE_AUTO_INSTALL = originalHiveDisable;
     }
   });
 

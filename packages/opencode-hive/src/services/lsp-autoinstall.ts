@@ -97,12 +97,25 @@ function installServer(def: LspServerDef): boolean {
   return false;
 }
 
+function shouldSkipLspInstall(): boolean {
+  return (
+    process.env.HIVE_DISABLE_AUTO_INSTALL === '1' ||
+    process.env.HIVE_DISABLE_AUTO_INSTALL === 'true' ||
+    process.env.NODE_ENV === 'test' ||
+    !!process.env.BUN_TEST ||
+    (process.env.HOME !== undefined && process.env.HOME.includes('hive-e2e'))
+  );
+}
+
 /**
  * Proactively check and install LSP servers at startup.
  * Fire-and-forget: callers can await or not.
  * Never throws — all errors are caught and logged.
  */
 export async function ensureLspServers(): Promise<LspServerResult[]> {
+  if (shouldSkipLspInstall()) {
+    return [];
+  }
   const results: LspServerResult[] = [];
 
   for (const server of LSP_SERVERS) {

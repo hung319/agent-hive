@@ -69,12 +69,25 @@ export function isToolAvailable(name: string): boolean {
   return (tool.binaries ?? []).some(b => isCliAvailable(b));
 }
 
+function shouldSkipToolsInstall(): boolean {
+  return (
+    process.env.HIVE_DISABLE_AUTO_INSTALL === '1' ||
+    process.env.HIVE_DISABLE_AUTO_INSTALL === 'true' ||
+    process.env.NODE_ENV === 'test' ||
+    !!process.env.BUN_TEST ||
+    (process.env.HOME !== undefined && process.env.HOME.includes('hive-e2e'))
+  );
+}
+
 /**
  * Auto-install all tools into the hive packages directory.
  * Agent Tools land in node_modules for require() resolution.
  * CLI Tools get binaries symlinked to hive/bin/ for PATH access.
  */
 export async function ensureToolsInstalled(): Promise<{ installed: string[]; failed: string[] }> {
+  if (shouldSkipToolsInstall()) {
+    return { installed: [], failed: [] };
+  }
   const installed: string[] = [];
   const failed: string[] = [];
 
