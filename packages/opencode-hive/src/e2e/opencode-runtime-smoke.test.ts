@@ -398,8 +398,13 @@ describe("e2e: Forager compaction loop mitigation (in-process)", () => {
   });
 
   it("system transform does not reintroduce broad startup instruction after compaction", async () => {
+    const { execSync } = await import("child_process");
     const { createOpencodeClient: mkClient } = await import("@opencode-ai/sdk");
     const OPENCODE_CLIENT = mkClient({ baseUrl: "http://localhost:1" }) as unknown as PluginInput["client"];
+
+    execSync("git init", { cwd: testRoot });
+    execSync('git config user.email "test@example.com"', { cwd: testRoot });
+    execSync('git config user.name "Test"', { cwd: testRoot });
 
     const ctx: PluginInput = {
       directory: testRoot,
@@ -487,8 +492,13 @@ Test compaction resume flow.
   });
 
   it("compaction hook output appended to session context does not contain hive_status", async () => {
+    const { execSync } = await import("child_process");
     const { createOpencodeClient: mkClient } = await import("@opencode-ai/sdk");
     const OPENCODE_CLIENT = mkClient({ baseUrl: "http://localhost:1" }) as unknown as PluginInput["client"];
+
+    execSync("git init", { cwd: testRoot });
+    execSync('git config user.email "test@example.com"', { cwd: testRoot });
+    execSync('git config user.name "Test"', { cwd: testRoot });
 
     const ctx: PluginInput = {
       directory: testRoot,
