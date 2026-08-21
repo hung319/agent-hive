@@ -1,18 +1,34 @@
-import { describe, it, expect, vi, beforeEach } from 'bun:test';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'bun:test';
 import * as os from 'os';
 import * as path from 'path';
-
-// Mock child_process before importing the module under test
-const mockExecSync = vi.fn();
-vi.mock('child_process', () => ({
-  execSync: mockExecSync,
-}));
+import * as childProcess from 'child_process';
 
 import { ensureLspServers, getLspInstallDir, prependLspToPath } from '../lsp-autoinstall.js';
+
+const mockExecSync = vi.fn() as unknown as vi.Mock<typeof childProcess.execSync>;
+const realExecSync = childProcess.execSync.bind(childProcess);
 
 describe('ensureLspServers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockExecSync.mockReset();
+    vi.spyOn(childProcess, 'execSync').mockImplementation(((...args: Parameters<typeof childProcess.execSync>) => {
+      const cmd = String(args[0] ?? '');
+      if (cmd.startsWith('git ') || cmd.includes('git --version') || cmd.includes('git config')) {
+        return realExecSync(...args);
+      }
+      return (mockExecSync as unknown as (...a: unknown[]) => unknown)(...args);
+    }) as typeof childProcess.execSync);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    mockExecSync.mockReset();
+  });
+
+  afterAll(() => {
+    vi.restoreAllMocks();
   });
 
   it('should skip all servers when already installed', async () => {
@@ -91,6 +107,22 @@ describe('ensureLspServers', () => {
 });
 
 describe('LSP local install path', () => {
+  beforeEach(() => {
+    vi.spyOn(childProcess, 'execSync').mockImplementation(((...args: Parameters<typeof childProcess.execSync>) => {
+      const cmd = String(args[0] ?? '');
+      if (cmd.startsWith('git ') || cmd.includes('git --version') || cmd.includes('git config')) {
+        return realExecSync(...args);
+      }
+      return (mockExecSync as unknown as (...a: unknown[]) => unknown)(...args);
+    }) as typeof childProcess.execSync);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  afterAll(() => {
+    vi.restoreAllMocks();
+  });
+
   it('getLspInstallDir returns ~/.config/opencode/hive/lsp', () => {
     const installDir = getLspInstallDir();
     const expected = path.join(os.homedir(), '.config', 'opencode', 'hive', 'lsp');

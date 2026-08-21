@@ -1,6 +1,9 @@
-import { execSync } from 'child_process';
+import * as childProcess from 'child_process';
 import * as path from 'path';
 import * as os from 'os';
+
+const execSync = (...args: Parameters<typeof childProcess.execSync>) =>
+  (childProcess as unknown as { execSync: typeof childProcess.execSync }).execSync(...args);
 
 /**
  * LSP server definition for proactive installation.
