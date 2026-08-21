@@ -6595,29 +6595,12 @@ class WorktreeService {
         base = (await git.revparse(["HEAD"])).trim();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        const fsSync = await import("fs");
-        const { execSync } = await import("child_process");
-        let gitVersion = "unknown";
-        let gitConfig = "unknown";
         try {
-          gitVersion = execSync("git --version", { encoding: "utf-8" }).trim();
+          const fsSync = await import("fs");
+          const gitDirExists = fsSync.existsSync(path4.join(this.config.baseDir, ".git"));
+          const dirEntries = fsSync.existsSync(this.config.baseDir) ? fsSync.readdirSync(this.config.baseDir).join(", ") : "DIR_NOT_FOUND";
+          console.error(`[DIAG] baseDir=${this.config.baseDir} gitDirExists=${gitDirExists} entries=${dirEntries} cwd=${process.cwd()} home=${process.env.HOME} err=${msg}`);
         } catch {}
-        try {
-          gitConfig = execSync("git config --global --list", { encoding: "utf-8" }).trim();
-        } catch {}
-        const gitDirExists = fsSync.existsSync(path4.join(this.config.baseDir, ".git"));
-        const dirEntries = fsSync.existsSync(this.config.baseDir) ? fsSync.readdirSync(this.config.baseDir).join(", ") : "DIR_NOT_FOUND";
-        console.error("[DIAG-CI] worktreeService.create FAILED", JSON.stringify({
-          baseDir: this.config.baseDir,
-          hiveDir: this.config.hiveDir,
-          gitDirExists,
-          dirEntries,
-          processCwd: process.cwd(),
-          processHome: process.env.HOME,
-          gitVersion,
-          gitConfig: gitConfig.substring(0, 500),
-          originalError: msg
-        }, null, 2));
         throw new Error(`Failed to resolve HEAD in ${this.config.baseDir}: ${msg}. Ensure this directory is a valid git repository with at least one commit.`);
       }
     }

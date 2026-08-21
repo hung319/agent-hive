@@ -75,8 +75,6 @@ function shouldSkipRtkInstall(): boolean {
   return (
     process.env.HIVE_DISABLE_AUTO_INSTALL === '1' ||
     process.env.HIVE_DISABLE_AUTO_INSTALL === 'true' ||
-    process.env.NODE_ENV === 'test' ||
-    !!process.env.BUN_TEST ||
     (process.env.HOME !== undefined && process.env.HOME.includes('hive-e2e'))
   );
 }
