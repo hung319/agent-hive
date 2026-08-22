@@ -40,10 +40,29 @@ export function getHiveBinPath(): string {
   return BIN_DIR;
 }
 
-/** Check if an npm module is resolvable from the hive packages or normal require. */
+// Cached result of `npm root -g` (undefined = not yet resolved, null = unavailable)
+let cachedGlobalRoot: string | null | undefined;
+
+/**
+ * Global npm root from `npm root -g`, cached for process lifetime (null when unavailable).
+ */
+export function getGlobalNpmRoot(): string | null {
+  if (cachedGlobalRoot !== undefined) return cachedGlobalRoot;
+  try {
+    const out = execSync('npm root -g', { encoding: 'utf-8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    cachedGlobalRoot = out.length > 0 && fs.existsSync(out) ? out : null;
+  } catch {
+    cachedGlobalRoot = null;
+  }
+  return cachedGlobalRoot;
+}
+
+/** Check if an npm module is resolvable from the hive packages, global install, or normal require. */
 function isModuleResolvable(name: string): boolean {
   const hivePath = path.join(NODE_MODULES_DIR, name);
   if (fs.existsSync(hivePath)) return true;
+  const globalRoot = getGlobalNpmRoot();
+  if (globalRoot && fs.existsSync(path.join(globalRoot, name))) return true;
   try {
     require.resolve(name);
     return true;

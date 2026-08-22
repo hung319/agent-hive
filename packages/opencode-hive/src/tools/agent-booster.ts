@@ -1,7 +1,7 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin";
 import * as fs from 'fs';
 import * as path from 'path';
-import { getHiveNodeModulesPath } from '../utils/tool-installer.js';
+import { getHiveNodeModulesPath, getGlobalNpmRoot } from '../utils/tool-installer.js';
 
 /**
  * Agent Booster Tool
@@ -31,6 +31,40 @@ export interface AgentBoosterResult {
 // Lazy-loaded booster instance
 let boosterInstance: any = null;
 let boosterInitPromise: Promise<void> | null = null;
+// Raw module kept separate from boosterInstance, which may be .default-unwrapped
+let boosterModule: any = null;
+let loadedBoosterPath: string | null = null;
+
+const BOOSTER_PACKAGE = '@sparkleideas/agent-booster';
+
+/** A directory counts as a package if it carries an entry point require() can load. */
+function isPackageDir(pkgDir: string): boolean {
+  if (!fs.existsSync(pkgDir)) return false;
+  if (fs.existsSync(path.join(pkgDir, 'package.json'))) return true;
+  return (
+    fs.existsSync(path.join(pkgDir, 'index.js')) ||
+    fs.existsSync(path.join(pkgDir, 'index.cjs')) ||
+    fs.existsSync(path.join(pkgDir, 'index.mjs'))
+  );
+}
+
+/**
+ * Resolve booster package path. Precedence: hive packages -> global npm root -> cwd -> require.resolve.
+ */
+function resolveBoosterPackage(): string | null {
+  const candidates = [getHiveNodeModulesPath(), getGlobalNpmRoot(), path.join(process.cwd(), 'node_modules')];
+  for (const base of candidates) {
+    if (!base) continue;
+    const pkgDir = path.join(base, BOOSTER_PACKAGE);
+    if (isPackageDir(pkgDir)) return pkgDir;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require.resolve(BOOSTER_PACKAGE);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Initialize agent-booster with lazy loading
@@ -47,11 +81,25 @@ async function initBooster(): Promise<void> {
   
   boosterInitPromise = (async () => {
     try {
-      // Dynamic require - try hive packages first, fall back to normal resolution
-      const hiveModules = getHiveNodeModulesPath();
-      const hivePkgPath = path.join(hiveModules, '@sparkleideas/agent-booster');
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const booster = fs.existsSync(hivePkgPath) ? require(hivePkgPath) : require('@sparkleideas/agent-booster');
+      let booster: any;
+      const pkgPath = resolveBoosterPackage();
+      if (pkgPath) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        booster = require(pkgPath);
+        loadedBoosterPath = pkgPath;
+      } else {
+        // Last resort: dynamic ESM import (covers ESM-only builds require() cannot load)
+        try {
+          booster = await import(BOOSTER_PACKAGE);
+          if (booster && typeof booster === 'object' && 'default' in booster) {
+            booster = booster.default ?? booster;
+          }
+          loadedBoosterPath = null;
+        } catch {
+          throw new Error(`${BOOSTER_PACKAGE} not found (checked hive packages, global npm root, and local resolution)`);
+        }
+      }
+      boosterModule = booster;
       
       // Initialize the booster
       if (booster && typeof booster.init === 'function') {
@@ -63,10 +111,12 @@ async function initBooster(): Promise<void> {
         boosterInstance = booster || {};
       }
       
-      console.log('[agent-booster] Initialized successfully');
+      console.log(`[agent-booster] Initialized successfully${loadedBoosterPath ? ` from ${loadedBoosterPath}` : ''}`);
     } catch (error) {
       console.warn('[agent-booster] Failed to initialize:', error instanceof Error ? error.message : error);
       boosterInstance = null;
+      boosterModule = null;
+      loadedBoosterPath = null;
     }
   })();
   
@@ -212,12 +262,17 @@ export async function getBoosterStatus(): Promise<{
     return { available: false };
   }
   
+  // Version from loaded module / package.json — a bare-name import fails for hive/global installs
   try {
-    const booster = await import('@sparkleideas/agent-booster');
-    return {
-      available: true,
-      version: (booster as any).version || 'unknown',
-    };
+    const raw = boosterModule ?? boosterInstance;
+    if (typeof raw?.version === 'string' && raw.version.length > 0) {
+      return { available: true, version: raw.version };
+    }
+    const pkgJsonPath = loadedBoosterPath
+      ? path.join(loadedBoosterPath, 'package.json')
+      : require.resolve(`${BOOSTER_PACKAGE}/package.json`);
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
+    return { available: true, version: pkg.version || 'unknown' };
   } catch {
     return { available: true };
   }

@@ -131,14 +131,17 @@ async function initMemory(options?: {
       // Ensure index directory exists
       fs.mkdirSync(indexPath, { recursive: true });
       
-      // Initialize memory instance
-      if (typeof memory.init === 'function') {
-        await memory.init({
+      // Assign memoryInstance in every branch: builds differ (CJS exports
+      // object vs ESM default export), and skipping the assignment left the
+      // service in fallback mode despite successful init.
+      if (memory.default && typeof memory.default.init === 'function') {
+        memoryInstance = memory.default;
+        await memoryInstance.init({
           indexPath,
           dimensions,
         });
-      } else if (memory.default && typeof memory.default.init === 'function') {
-        memoryInstance = memory.default;
+      } else if (typeof memory.init === 'function') {
+        memoryInstance = memory;
         await memoryInstance.init({
           indexPath,
           dimensions,
@@ -151,6 +154,10 @@ async function initMemory(options?: {
     } catch (error) {
       console.warn('[vector-memory] Failed to initialize:', error instanceof Error ? error.message : error);
       memoryInstance = null;
+      // Reset the latch: the package may still be installing asynchronously.
+      // Without this, one early failure pins the process to fallback mode
+      // until restart (backend type oscillated between runs).
+      memoryInitPromise = null;
     }
   })();
   
@@ -177,7 +184,7 @@ export async function addMemory(
         metadata,
       });
       
-      return { id, success: true };
+      return { id, success: true, fallback: false };
     } catch (error) {
       console.warn('[vector-memory] Failed to add with vector:', error instanceof Error ? error.message : error);
       // Fall through to fallback
@@ -220,6 +227,7 @@ export async function searchMemories(
           score: r.score || r.similarity || 0,
           metadata: r.metadata || {},
         })),
+        fallback: false,
       };
     } catch (error) {
       console.warn('[vector-memory] Failed to search with vector:', error instanceof Error ? error.message : error);
@@ -257,6 +265,7 @@ export async function listMemories(
           score: 1.0,
           metadata: r.metadata || {},
         })),
+        fallback: false,
       };
     } catch {
       // Fall through to fallback
@@ -323,28 +332,42 @@ export async function getMemoryStatus(): Promise<{
 }> {
   await initMemory();
   
+  // A stats() probe failure must not flip the reported type to fallback:
+  // add/search still use the vector instance when it loaded.
   if (memoryInstance) {
+    let stats: { total: number; byType?: Record<string, number> } = { total: 0 };
     try {
-      const stats = await memoryInstance.stats?.() || {};
-      return {
-        available: true,
-        type: 'vector',
-        stats,
-      };
-    } catch {
-      // Fall through
+      stats = (await memoryInstance.stats?.()) || {};
+    } catch (error) {
+      console.warn('[vector-memory] stats() failed:', error instanceof Error ? error.message : error);
     }
+    return {
+      available: true,
+      type: 'vector',
+      stats,
+    };
   }
   
-  // Check fallback storage
-  const fallbackStats = getFallbackStats() as { total: number; byType?: Record<string, number> };
-  const shardInfo = getActiveShardInfo();
-  return {
-    available: false,
-    type: 'fallback',
-    stats: fallbackStats,
-    shard: shardInfo,
-  };
+  ensureFallbackDir();
+  try {
+    const fallbackStats = getFallbackStats() as { total: number; byType?: Record<string, number> };
+    const shardInfo = getActiveShardInfo();
+    return {
+      available: false,
+      type: 'fallback',
+      stats: fallbackStats,
+      shard: shardInfo,
+    };
+  } catch (error) {
+    // Never throw from status — a throw here would surface the wrapper's
+    // generic error object and contradict persisted data.
+    console.warn('[vector-memory] fallback stats failed:', error instanceof Error ? error.message : error);
+    return {
+      available: false,
+      type: 'fallback',
+      stats: { total: 0 },
+    };
+  }
 }
 
 // ============================================================================

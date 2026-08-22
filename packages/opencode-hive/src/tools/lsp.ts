@@ -70,18 +70,27 @@ lsp_rename({ filePath: "src/utils.ts", oldName: "getUser", newName: "fetchUser" 
       }, null, 2);
     }
 
-    const result = await getLspClient(filePath);
+    let result = await getLspClient(filePath);
 
     if (!result) {
+      // First attempt failed — make sure the server is installed, then retry once.
       const status = await lspManager.checkAndInstall(filePath);
-      return JSON.stringify({
-        success: false,
-        language: status.language,
-        error: status.message || 'LSP server not available',
-        autoInstallFailed: true,
-        alternatives: await getLspStatus(filePath),
-        hint: 'LSP server not available. Consider using ast_grep_rewrite_code for pattern-based renaming.',
-      }, null, 2);
+      if (status.ready) {
+        result = await getLspClient(filePath);
+      }
+
+      if (!result) {
+        return JSON.stringify({
+          success: false,
+          language: status.language,
+          error: status.ready
+            ? 'LSP server reported ready but client initialization failed'
+            : status.message || 'LSP server not available',
+          autoInstallFailed: !status.ready,
+          alternatives: await getLspStatus(filePath),
+          hint: 'LSP server not available. Consider using ast_grep_rewrite_code for pattern-based renaming.',
+        }, null, 2);
+      }
     }
 
     const { client } = result;
@@ -175,16 +184,25 @@ export const lspGotoDefinitionTool: ToolDefinition = tool({
       }, null, 2);
     }
 
-    const result = await getLspClient(filePath);
+    let result = await getLspClient(filePath);
 
     if (!result) {
+      // First attempt failed — make sure the server is installed, then retry once.
       const status = await lspManager.checkAndInstall(filePath);
-      return JSON.stringify({
-        success: false,
-        language: status.language,
-        error: status.message || 'LSP server not available',
-        alternatives: await getLspStatus(filePath),
-      }, null, 2);
+      if (status.ready) {
+        result = await getLspClient(filePath);
+      }
+
+      if (!result) {
+        return JSON.stringify({
+          success: false,
+          language: status.language,
+          error: status.ready
+            ? 'LSP server reported ready but client initialization failed'
+            : status.message || 'LSP server not available',
+          alternatives: await getLspStatus(filePath),
+        }, null, 2);
+      }
     }
 
     const { client } = result;
@@ -240,16 +258,25 @@ export const lspFindReferencesTool: ToolDefinition = tool({
       }, null, 2);
     }
 
-    const result = await getLspClient(filePath);
+    let result = await getLspClient(filePath);
 
     if (!result) {
+      // First attempt failed — make sure the server is installed, then retry once.
       const status = await lspManager.checkAndInstall(filePath);
-      return JSON.stringify({
-        success: false,
-        language: status.language,
-        error: status.message || 'LSP server not available',
-        alternatives: await getLspStatus(filePath),
-      }, null, 2);
+      if (status.ready) {
+        result = await getLspClient(filePath);
+      }
+
+      if (!result) {
+        return JSON.stringify({
+          success: false,
+          language: status.language,
+          error: status.ready
+            ? 'LSP server reported ready but client initialization failed'
+            : status.message || 'LSP server not available',
+          alternatives: await getLspStatus(filePath),
+        }, null, 2);
+      }
     }
 
     const { client } = result;
@@ -312,16 +339,25 @@ export const lspDiagnosticsTool: ToolDefinition = tool({
       }, null, 2);
     }
 
-    const result = await getLspClient(filePath);
+    let result = await getLspClient(filePath);
 
     if (!result) {
+      // First attempt failed — make sure the server is installed, then retry once.
       const status = await lspManager.checkAndInstall(filePath);
-      return JSON.stringify({
-        success: false,
-        language: status.language,
-        error: status.message || 'LSP server not available',
-        alternatives: await getLspStatus(filePath),
-      }, null, 2);
+      if (status.ready) {
+        result = await getLspClient(filePath);
+      }
+
+      if (!result) {
+        return JSON.stringify({
+          success: false,
+          language: status.language,
+          error: status.ready
+            ? 'LSP server reported ready but client initialization failed'
+            : status.message || 'LSP server not available',
+          alternatives: await getLspStatus(filePath),
+        }, null, 2);
+      }
     }
 
     const { client } = result;
@@ -397,16 +433,25 @@ export const lspHoverTool: ToolDefinition = tool({
       }, null, 2);
     }
 
-    const result = await getLspClient(filePath);
+    let result = await getLspClient(filePath);
 
     if (!result) {
+      // First attempt failed — make sure the server is installed, then retry once.
       const status = await lspManager.checkAndInstall(filePath);
-      return JSON.stringify({
-        success: false,
-        language: status.language,
-        error: status.message || 'LSP server not available',
-        alternatives: await getLspStatus(filePath),
-      }, null, 2);
+      if (status.ready) {
+        result = await getLspClient(filePath);
+      }
+
+      if (!result) {
+        return JSON.stringify({
+          success: false,
+          language: status.language,
+          error: status.ready
+            ? 'LSP server reported ready but client initialization failed'
+            : status.message || 'LSP server not available',
+          alternatives: await getLspStatus(filePath),
+        }, null, 2);
+      }
     }
 
     const { client } = result;
