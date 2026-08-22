@@ -2637,6 +2637,7 @@ Expand your Discovery section and try again.`;
         allAgents['codebase-locator'] = builtInAgentConfigs['codebase-locator'];
         allAgents['codebase-analyzer'] = builtInAgentConfigs['codebase-analyzer'];
       } else {
+        console.warn('[hive] agentMode "dedicated" is deprecated — using unified agent set (zetta + 5 subagents). Dedicated planner/orchestrator split will return in a future major.');
         allAgents['zetta'] = builtInAgentConfigs['zetta'];
         allAgents['scout-researcher'] = builtInAgentConfigs['scout-researcher'];
         allAgents['forager-worker'] = builtInAgentConfigs['forager-worker'];

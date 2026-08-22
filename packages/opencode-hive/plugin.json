@@ -1,6 +1,6 @@
 {
   "name": "@hung319/opencode-hive",
-  "version": "1.5.5",
+  "version": "1.20.4",
   "description": "Context-Driven Development for AI coding assistants",
   "dataPath": ".hive",
   "commands": [
@@ -16,6 +16,7 @@
     "hive_task_create",
     "hive_task_update",
     "hive_worktree_start",
+    "hive_worktree_batch",
     "hive_worktree_create",
     "hive_worktree_commit",
     "hive_worktree_discard",
@@ -38,6 +39,7 @@
     "hive_memory_set",
     "hive_memory_replace",
     "hive_memory_recall",
+    "hive_memory_create",
     "hive_memory_update",
     "hive_memory_forget",
     "hive_journal_write",
@@ -48,23 +50,40 @@
     "hive_vector_search",
     "hive_vector_add",
     "hive_vector_status",
+    "auto_cr_status",
+    "auto_cr_scan",
+    "auto_cr_diff",
+    "auto_cr_rules",
+    "explore_directory",
+    "look_at",
+    "artifact_search",
+    "btca_ask",
+    "pty_start",
+    "pty_send",
+    "pty_read",
+    "pty_kill",
+    "pty_list",
+    "ast_grep_find_code",
+    "ast_grep_rewrite_code",
+    "ast_grep_dump_syntax_tree",
+    "ast_grep_scan_code",
+    "ast_grep_analyze_imports",
+    "code_search",
+    "code_search_index",
+    "code_search_status",
+    "call_graph_callees",
+    "call_graph_callers",
+    "call_graph_path",
+    "call_graph_extract",
     "gitingest"
   ],
   "agents": [
     "zetta",
-    "architect-planner",
-    "swarm-orchestrator",
     "scout-researcher",
     "forager-worker",
     "hygienic-reviewer",
-    "code-reviewer",
-    "code-simplifier",
-    "forager-example-template",
-    "hygienic-example-template",
     "codebase-locator",
-    "codebase-analyzer",
-    "pattern-finder",
-    "project-initializer"
+    "codebase-analyzer"
   ],
   "mcp": [
     "websearch",
@@ -72,11 +91,5 @@
     "grep_app",
     "codegraph"
   ],
-  "hooks": [
-    "hive.todo-enforcer",
-    "hive.hashline-edit",
-    "hive.comment-checker",
-    "hive.token-truncation",
-    "hive.session-snapshot"
-  ]
+  "hooks": []
 }

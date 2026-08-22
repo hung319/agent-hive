@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.3] - 2026-08-22
+- Fix: LSP retry after ready (resolveServerPath via node_modules/.bin), vector init latch + instance assign, agent-booster global npm root detection
+
+## [1.20.2] - 2026-08-22
+- Fix: auto_cr_scan path last + quote, LSP bin path node_modules/.bin
+
+## [1.20.1] - 2026-08-22
+- Fix: 4 self-test bugs (ast-grep extensions crash, rewrite metavariable, typed-memory upsert, auto-cr bin alias) + remove dora
+
+## [1.20.0] - 2026-08-22
+- See docs/releases/v1.20.0.md (RTK replaces snip, new skills/MCP, test stability)
+
+> **Note:** Detailed releases from 1.4.0 onward are in `docs/releases/v*.md`. This CHANGELOG is intentionally frozen at 1.3.1 for historical context; see `docs/releases/` for latest.
+
 ## [1.3.1] - 2026-03-17
 
 ### Added
