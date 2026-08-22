@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import { getHiveNodeModulesPath } from '../utils/tool-installer.js';
 import { filterSensitiveData } from '../utils/sensitive-data-filter.js';
 import { safeStageAsync } from '../utils/safe-stage.js';
+import { setMemoryFilterConfig, getMemoryFilterConfig } from './memory-config.js';
 
 /**
  * Vector Memory Service
@@ -86,15 +87,7 @@ export function setQualityConfig(config: {
   if (config.enableNearDedup !== undefined) qualityConfig.enableNearDedup = config.enableNearDedup;
 }
 
-// Sensitive data filter config (set from index.ts config hook)
-let memoryFilterConfig: { enabled?: boolean; redactEmails?: boolean } | undefined;
-
-/**
- * Override memory filter configuration at runtime.
- */
-export function setMemoryFilterConfig(config: { enabled?: boolean; redactEmails?: boolean } | undefined): void {
-  memoryFilterConfig = config;
-}
+// Filter config is owned by memory-config.ts; setMemoryFilterConfig below is a compat re-export.
 
 // Lazy-loaded memory instance
 let memoryInstance: any = null;
@@ -172,7 +165,7 @@ export async function addMemory(
   metadata: MemoryMetadata = {}
 ): Promise<{ id: string; success: boolean; fallback?: boolean; rejected?: boolean; reason?: string }> {
   // Apply sensitive data filter before saving (if configured)
-  const filteredContent = filterSensitiveData(content, memoryFilterConfig as any);
+  const filteredContent = filterSensitiveData(content, getMemoryFilterConfig());
 
   // Try vector memory first
   await initMemory();
@@ -799,3 +792,5 @@ export const VectorMemoryService = {
 };
 
 export default VectorMemoryService;
+
+export { setMemoryFilterConfig, getMemoryFilterConfig };

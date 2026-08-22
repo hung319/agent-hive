@@ -3,25 +3,46 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { filterSensitiveData } from '../utils/sensitive-data-filter.js';
+import { getMemoryFilterConfig } from '../services/memory-config.js';
 
 /**
  * Hive Memory System
- * 
- * Persistent memory blocks similar to Letta's memory blocks.
- * - global: Shared across all projects (stored in ~/.config/opencode/hive/memory/)
- * - project: Project-scoped memory (stored in .hive/memory/)
+ *
+ * Four intentionally distinct memory layers (do NOT merge their stores):
+ *
+ * 1. Block memory (this file, top half) — Letta-style markdown blocks with
+ *    frontmatter, injected into the system prompt every turn via
+ *    buildMemoryInjection(). Global scope lives in
+ *    ~/.config/opencode/hive/memory/global/, project scope in
+ *    <project>/.hive/memory/project/. This is the agent's "identity +
+ *    standing context" layer. Tools: hive_memory_list/set/replace.
+ *
+ * 2. Typed memory (this file, bottom half) — append-mostly logfmt records
+ *    (decision/learning/preference/blocker/context/pattern) scoped by topic,
+ *    stored per-day in ~/.config/opencode/hive/typed-memory/YYYY-MM-DD.logfmt.
+ *    This is searchable structured knowledge. Tools:
+ *    hive_memory_recall/create/update/forget.
+ *
+ * 3. Journal (this file, middle) — append-only audit log of insights and
+ *    decisions, one timestamped .md per entry in
+ *    ~/.config/opencode/hive/journal/. Unlike typed memory it is never
+ *    updated or deleted (no upsert/forget); it exists for chronological
+ *    traceability. It overlaps conceptually with hive_memory_create — prefer
+ *    typed memory for knowledge you will recall by scope/type, journal for
+ *    dated "what happened" records. Tools: hive_journal_write/search.
+ *
+ * 4. Vector memory (services/vector-memory.ts) — semantic search over
+ *    embeddings (HNSW via @sparkleideas/memory, sharded JSON fallback).
+ *    This is the retrieval layer for "find similar past knowledge".
+ *    Tools: hive_vector_add/search/status.
+ *
+ * All write paths share the sensitive-data filter configured once in
+ * services/memory-config.ts.
  */
 
 // ============================================================================
 // Types
 // ============================================================================
-
-// Shared memory filter config (set from index.ts config hook)
-let memoryFilterConfig: { enabled?: boolean; redactEmails?: boolean } | undefined;
-
-export function setMemoryFilterConfig(config: { enabled?: boolean; redactEmails?: boolean } | undefined): void {
-  memoryFilterConfig = config;
-}
 
 export interface MemoryBlock {
   scope: 'global' | 'project';
@@ -193,16 +214,95 @@ export async function ensureMemorySeeded(projectRoot: string): Promise<void> {
 }
 
 // ============================================================================
+// Project Block API (single owner of .hive/memory/project/<label>.md)
+// ============================================================================
+
+/**
+ * Read the trimmed body of a project-scoped memory block ('' if missing).
+ * Block file format (.hive/memory/project/<label>.md) is owned here —
+ * callers must not parse or write these files directly.
+ */
+export function readProjectMemoryBody(projectRoot: string, label = 'project'): string {
+  const filePath = path.join(getProjectMemoryDir(projectRoot), `${label}.md`);
+  if (!fs.existsSync(filePath)) return '';
+  try {
+    return readMemoryBlock(filePath, 'project').value;
+  } catch {
+    return '';
+  }
+}
+
+export interface WriteProjectMemoryResult {
+  ok: boolean;
+  reason?: 'read-only' | 'empty-body';
+  charsWritten?: number;
+  charsLimit?: number;
+}
+
+/**
+ * Write a project-scoped memory block through the block-memory pipeline:
+ * preserves frontmatter, applies the shared sensitive-data filter, enforces
+ * the size limit (truncating oldest content first), and refuses read-only
+ * blocks. The sanctioned entry point for hooks/auto-save.
+ */
+export function writeProjectMemoryBody(
+  projectRoot: string,
+  label: string,
+  body: string,
+  opts?: { description?: string },
+): WriteProjectMemoryResult {
+  const dir = getProjectMemoryDir(projectRoot);
+  const filePath = path.join(dir, `${label}.md`);
+
+  let description = opts?.description || `Memory block: ${label}`;
+  let limit = 5000;
+  let readOnly = false;
+  if (fs.existsSync(filePath)) {
+    try {
+      const existing = readMemoryBlock(filePath, 'project');
+      // Existing frontmatter always wins; opts only fills creation defaults.
+      description = existing.description || description;
+      limit = existing.limit;
+      readOnly = existing.readOnly;
+    } catch {
+      // Corrupt frontmatter — rewrite with defaults below.
+    }
+  }
+
+  if (readOnly) {
+    return { ok: false, reason: 'read-only' };
+  }
+
+  const filtered = filterSensitiveData(body.trim(), getMemoryFilterConfig());
+  if (!filtered) {
+    return { ok: false, reason: 'empty-body' };
+  }
+
+  // Invariant: blocks never exceed their limit; drop oldest content first.
+  const TRUNCATION_MARKER = '…[truncated]\n';
+  let value = filtered;
+  if (value.length > limit) {
+    value = TRUNCATION_MARKER + value.slice(value.length - (limit - TRUNCATION_MARKER.length));
+  }
+
+  const content = buildFrontmatter({ label, description, limit, read_only: readOnly });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, content + value + '\n', 'utf-8');
+
+  return { ok: true, charsWritten: value.length, charsLimit: limit };
+}
+
+// ============================================================================
 // Journal Operations
 // ============================================================================
 
 function writeJournalEntry(title: string, body: string, project?: string, tags: string[] = []): JournalEntry {
   const journalDir = getJournalDir();
   fs.mkdirSync(journalDir, { recursive: true });
-  
+
   const now = new Date();
   const id = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}-${String(now.getUTCHours()).padStart(2, '0')}${String(now.getUTCMinutes()).padStart(2, '0')}${String(now.getUTCSeconds()).padStart(2, '0')}-${String(now.getUTCMilliseconds()).padStart(3, '0')}`;
-  
+
   const filePath = path.join(journalDir, `${id}.md`);
   const frontmatter = buildFrontmatter({
     title,
@@ -210,13 +310,16 @@ function writeJournalEntry(title: string, body: string, project?: string, tags: 
     tags,
     created: now.toISOString(),
   });
-  
-  fs.writeFileSync(filePath, frontmatter + body + '\n', 'utf-8');
-  
+
+  // Journal is a memory write path too — same sensitive-data filter as
+  // blocks/typed/vector so secrets never land on disk unredacted.
+  const filteredBody = filterSensitiveData(body, getMemoryFilterConfig());
+  fs.writeFileSync(filePath, frontmatter + filteredBody + '\n', 'utf-8');
+
   return {
     id,
     title,
-    body,
+    body: filteredBody,
     project,
     tags,
     created: now.toISOString(),
@@ -346,7 +449,7 @@ export const hiveMemorySetTool: ToolDefinition = tool({
     }
     
     // Apply sensitive data filter before saving
-    const filteredValue = filterSensitiveData(value, memoryFilterConfig);
+    const filteredValue = filterSensitiveData(value, getMemoryFilterConfig());
     
     // Check size limit
     if (filteredValue.length > limit) {
@@ -458,7 +561,9 @@ export const hiveMemoryReplaceTool: ToolDefinition = tool({
 });
 
 export const hiveJournalWriteTool: ToolDefinition = tool({
-  description: 'Write a journal entry. Journal is append-only for capturing insights, decisions, and discoveries.',
+  description: `Write a journal entry. Journal is an append-only audit log (one timestamped file per entry, never updated or deleted) for capturing insights, decisions, and discoveries as they happen.
+
+**Journal vs hive_memory_create:** both record knowledge. Use the journal for dated chronological records ("what happened today"); use hive_memory_create for scoped, typed knowledge you will later recall by scope/type (hive_memory_recall).`,
   args: {
     title: tool.schema.string().describe('Title of the journal entry'),
     body: tool.schema.string().describe('Content of the journal entry'),
@@ -773,7 +878,7 @@ export const hiveMemoryCreateTool: ToolDefinition = tool({
   async execute({ scope, type, content, issue, tags }) {
     await ensureTypedMemoryDir();
 
-    const filteredContent = filterSensitiveData(content, memoryFilterConfig);
+    const filteredContent = filterSensitiveData(content, getMemoryFilterConfig());
     const ts = new Date().toISOString();
     const safeScope = scope.trim().replace(/\s+/g, '-');
     const safeIssue = issue?.trim().replace(/\s+/g, '-');

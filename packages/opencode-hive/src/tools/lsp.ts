@@ -1,5 +1,6 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin";
-import { lspManager, getLanguageFromPath, getLspStatus, ensureLspInstalled, type LspStatus } from './lsp-manager.js';
+import { lspStatusManager, getLspStatus, ensureLspInstalled, type LspStatus } from './lsp-manager.js';
+import { getLanguageFromPath } from '../lsp/registry.js';
 import { LspManager, getLspClientForFile } from '../lsp/manager.js';
 
 /**
@@ -74,7 +75,7 @@ lsp_rename({ filePath: "src/utils.ts", oldName: "getUser", newName: "fetchUser" 
 
     if (!result) {
       // First attempt failed — make sure the server is installed, then retry once.
-      const status = await lspManager.checkAndInstall(filePath);
+      const status = await lspStatusManager.checkAndInstall(filePath);
       if (status.ready) {
         result = await getLspClient(filePath);
       }
@@ -188,7 +189,7 @@ export const lspGotoDefinitionTool: ToolDefinition = tool({
 
     if (!result) {
       // First attempt failed — make sure the server is installed, then retry once.
-      const status = await lspManager.checkAndInstall(filePath);
+      const status = await lspStatusManager.checkAndInstall(filePath);
       if (status.ready) {
         result = await getLspClient(filePath);
       }
@@ -262,7 +263,7 @@ export const lspFindReferencesTool: ToolDefinition = tool({
 
     if (!result) {
       // First attempt failed — make sure the server is installed, then retry once.
-      const status = await lspManager.checkAndInstall(filePath);
+      const status = await lspStatusManager.checkAndInstall(filePath);
       if (status.ready) {
         result = await getLspClient(filePath);
       }
@@ -343,7 +344,7 @@ export const lspDiagnosticsTool: ToolDefinition = tool({
 
     if (!result) {
       // First attempt failed — make sure the server is installed, then retry once.
-      const status = await lspManager.checkAndInstall(filePath);
+      const status = await lspStatusManager.checkAndInstall(filePath);
       if (status.ready) {
         result = await getLspClient(filePath);
       }
@@ -437,7 +438,7 @@ export const lspHoverTool: ToolDefinition = tool({
 
     if (!result) {
       // First attempt failed — make sure the server is installed, then retry once.
-      const status = await lspManager.checkAndInstall(filePath);
+      const status = await lspStatusManager.checkAndInstall(filePath);
       if (status.ready) {
         result = await getLspClient(filePath);
       }
@@ -508,7 +509,7 @@ export const lspCodeActionsTool: ToolDefinition = tool({
       }, null, 2);
     }
 
-    const status = await lspManager.checkAndInstall(filePath);
+    const status = await lspStatusManager.checkAndInstall(filePath);
 
     if (!status.ready) {
       return JSON.stringify({
@@ -564,11 +565,11 @@ lsp_status({ install: true })
         return JSON.stringify({
           success: false,
           error: `Unsupported file type: ${filePath}`,
-          supportedLanguages: lspManager.getAvailableLanguages(),
+          supportedLanguages: lspStatusManager.getAvailableLanguages(),
         }, null, 2);
       }
 
-      const status = await lspManager.checkAndInstall(filePath);
+      const status = await lspStatusManager.checkAndInstall(filePath);
 
       if (install && !status.ready) {
         const result = await ensureLspInstalled(lang);
@@ -585,7 +586,7 @@ lsp_status({ install: true })
         installed: status.installed,
         ready: status.ready,
         message: status.message,
-        info: lspManager.getLspInfo(filePath),
+        info: lspStatusManager.getLspInfo(filePath),
         activeClients: lspClientManager.getActiveClients(),
       }, null, 2);
     }

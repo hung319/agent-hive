@@ -1,4 +1,5 @@
 import { LspTransport } from './transport.js';
+import { detectLanguage } from './registry.js';
 
 /**
  * LSP protocol types
@@ -40,44 +41,6 @@ export interface WorkspaceEdit {
     newText: string;
   }>>;
   documentChanges?: any[];
-}
-
-/**
- * File extension to LSP language ID mapping.
- */
-const EXTENSION_TO_LANGUAGE: Record<string, string> = {
-  ts: 'typescript',
-  tsx: 'typescriptreact',
-  js: 'javascript',
-  jsx: 'javascriptreact',
-  mjs: 'javascript',
-  cjs: 'javascript',
-  py: 'python',
-  pyw: 'python',
-  pyi: 'python',
-  rs: 'rust',
-  go: 'go',
-  java: 'java',
-  cpp: 'cpp',
-  cc: 'cpp',
-  cxx: 'cpp',
-  c: 'c',
-  h: 'c',
-  hpp: 'cpp',
-  cs: 'csharp',
-  rb: 'ruby',
-  php: 'php',
-  vue: 'vue',
-  svelte: 'svelte',
-};
-
-/**
- * Detect LSP language ID from file path.
- */
-export function detectLanguage(filePath: string): string | null {
-  const ext = filePath.split('.').pop()?.toLowerCase();
-  if (!ext) return null;
-  return EXTENSION_TO_LANGUAGE[ext] ?? null;
 }
 
 /**

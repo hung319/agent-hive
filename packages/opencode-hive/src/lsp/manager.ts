@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { LspTransport } from './transport.js';
 import { LspClient } from './client.js';
-import { getLanguageFromPath, getLspInstallDir, type LspServerConfig } from '../tools/lsp-manager.js';
+import { resolveRegistryEntry, getLanguageFromPath } from './registry.js';
+import { getLspNodeBinDir, getLspLegacyBinDir } from '../utils/lsp-path.js';
 
 /**
  * LSP Manager — manages LSP client instances per workspace and language.
@@ -107,25 +108,6 @@ interface ResolvedServer {
 }
 
 /**
- * Server command definitions per language (bare command names).
- * Local install directories are probed before falling back to system PATH.
- */
-const SERVER_COMMANDS: Record<string, { command: string; args: string[] }> = {
-  typescript: { command: 'typescript-language-server', args: ['--stdio'] },
-  python: { command: 'pyright', args: ['--stdio'] },
-  rust: { command: 'rust-analyzer', args: [] },
-  go: { command: 'gopls', args: [] },
-  java: { command: 'jdtls', args: [] },
-  cpp: { command: 'clangd', args: [] },
-  c: { command: 'clangd', args: [] },
-  csharp: { command: 'omniSharp', args: ['--languageserver', '--hostPID', String(process.pid)] },
-  ruby: { command: 'solargraph', args: ['stdio'] },
-  php: { command: 'phpactor', args: ['--stdio'] },
-  vue: { command: 'vue-language-server', args: ['--stdio'] },
-  svelte: { command: 'svelte-language-server', args: ['--stdio'] },
-};
-
-/**
  * Check whether a file exists and is executable.
  */
 function isExecutable(candidate: string): boolean {
@@ -152,22 +134,19 @@ function findOnPath(command: string): string | null {
 /**
  * Resolve the LSP server binary path for a given language.
  *
+ * Server binaries come from the shared registry (`./registry.ts`).
  * Checks in order, returning the first candidate that actually exists:
  * 1. Local npm-style install (~/.config/opencode/hive/lsp/node_modules/.bin/)
  * 2. Legacy local bin dir (~/.config/opencode/hive/lsp/bin/)
  * 3. System PATH
  */
 async function resolveServerPath(serverId: string): Promise<ResolvedServer | null> {
-  const installDir = getLspInstallDir();
-  const nodeBinDir = path.join(installDir, 'node_modules', '.bin');
-  const legacyBinDir = path.join(installDir, 'bin');
-
-  const server = SERVER_COMMANDS[serverId];
+  const server = resolveRegistryEntry(serverId);
   if (!server) return null;
 
   const localCandidates = [
-    path.join(nodeBinDir, server.command),
-    path.join(legacyBinDir, server.command),
+    path.join(getLspNodeBinDir(), server.serverBinary),
+    path.join(getLspLegacyBinDir(), server.serverBinary),
   ];
 
   for (const candidate of localCandidates) {
@@ -176,7 +155,7 @@ async function resolveServerPath(serverId: string): Promise<ResolvedServer | nul
     }
   }
 
-  const onPath = findOnPath(server.command);
+  const onPath = findOnPath(server.serverBinary);
   return onPath ? { path: onPath, args: server.args } : null;
 }
 

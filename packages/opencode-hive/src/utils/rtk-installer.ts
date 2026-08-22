@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { shouldSkipAutoInstall } from './skip-install.js';
 
 const RTK_REPO = 'rtk-ai/rtk';
 const FALLBACK_VERSION = '1.0.0';
@@ -71,21 +72,13 @@ async function getLatestVersion(): Promise<string> {
   return data.tag_name.replace(/^v/, '');
 }
 
-function shouldSkipRtkInstall(): boolean {
-  return (
-    process.env.HIVE_DISABLE_AUTO_INSTALL === '1' ||
-    process.env.HIVE_DISABLE_AUTO_INSTALL === 'true' ||
-    (process.env.HOME !== undefined && process.env.HOME.includes('hive-e2e'))
-  );
-}
-
 /**
  * Ensure RTK binary is installed.
  * Downloads from GitHub releases if not present.
  * Falls back to 'rtk' (PATH lookup) if installation fails.
  */
 export async function ensureRtkInstalled(): Promise<string> {
-  if (shouldSkipRtkInstall()) {
+  if (shouldSkipAutoInstall()) {
     return getRtkBinaryPath();
   }
   const binaryPath = getRtkBinaryPath();

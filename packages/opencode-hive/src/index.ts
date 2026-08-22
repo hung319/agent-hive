@@ -25,14 +25,14 @@ import {
 // Skill-Embedded MCP Tools
 import { skillMcpTool, listSkillMcpsTool } from './tools/skill-mcp.js';
 // Memory Tools
-import { hiveMemoryListTool, hiveMemorySetTool, hiveMemoryReplaceTool, hiveJournalWriteTool, hiveJournalSearchTool, hiveMemoryRecallTool, hiveMemoryCreateTool, hiveMemoryUpdateTool, hiveMemoryForgetTool, buildMemoryInjection, ensureMemorySeeded } from './tools/memory.js';
+import { hiveMemoryListTool, hiveMemorySetTool, hiveMemoryReplaceTool, hiveJournalWriteTool, hiveJournalSearchTool, hiveMemoryRecallTool, hiveMemoryCreateTool, hiveMemoryUpdateTool, hiveMemoryForgetTool, buildMemoryInjection, ensureMemorySeeded, readProjectMemoryBody, writeProjectMemoryBody } from './tools/memory.js';
 // Agent Booster Tools (ultra-fast code editing)
 import { hiveCodeEditTool, hiveLazyEditTool, hiveBoosterStatusTool } from './tools/agent-booster.js';
 // Vector Memory Tools (semantic search)
 import { hiveVectorSearchTool, hiveVectorAddTool, hiveVectorStatusTool } from './tools/vector-memory.js';
-import { listMemories, searchMemories, addMemory, setShardingConfig, setQualityConfig, setMemoryFilterConfig as setVectorMemoryFilterConfig } from './services/vector-memory.js';
+import { listMemories, searchMemories, addMemory, setShardingConfig, setQualityConfig } from './services/vector-memory.js';
 import { formatAutoRecallInjection, buildCaptureSnapshot } from './utils/auto-recall.js';
-import { setMemoryFilterConfig as setBlockMemoryFilterConfig } from './tools/memory.js';
+import { setMemoryFilterConfig } from './services/memory-config.js';
 import { reInjectMemoriesAfterCompact } from './utils/compaction-restoration.js';
 import { safeHook } from './utils/safe-stage.js';
 import { HiddenJudgeService } from './services/hidden-judge.js';
@@ -329,6 +329,11 @@ function ensureHiveGitignore(projectDir: string): void {
 /**
  * Auto-save project memory: update project.md with current feature status.
  * Called on task completion and compaction.
+ *
+ * Entry building/dedup lives here (feature domain); all file mechanics —
+ * frontmatter, sensitive-data filtering, size limits, read-only guard — are
+ * delegated to the block-memory API (readProjectMemoryBody/writeProjectMemoryBody),
+ * which owns .hive/memory/project/project.md.
  */
 function autoSaveProjectMemory(
   projectDir: string,
@@ -340,16 +345,6 @@ function autoSaveProjectMemory(
     if (!active) return;
     const info = featureService.getInfo(active.name);
     if (!info) return;
-
-    const projectMdPath = path.join(projectDir, '.hive', 'memory', 'project', 'project.md');
-
-    // Read current content
-    let currentBody = '';
-    if (fs.existsSync(projectMdPath)) {
-      const raw = fs.readFileSync(projectMdPath, 'utf-8');
-      const bodyMatch = raw.match(/^---[\s\S]*?---\n([\s\S]*)$/);
-      currentBody = bodyMatch ? bodyMatch[1].trim() : raw.trim();
-    }
 
     // Build new entry
     const doneCount = info.tasks.filter(t => t.status === 'done').length;
@@ -370,6 +365,7 @@ function autoSaveProjectMemory(
     const entry = entryLines.join('\n');
 
     // Prepend new entry, deduplicate by date+feature, keep under 20 entries
+    const currentBody = readProjectMemoryBody(projectDir);
     const existingEntries = currentBody ? currentBody.split('\n\n').filter(Boolean) : [];
     // Remove old entry for same feature on same day
     const today = new Date().toISOString().slice(0, 10);
@@ -378,21 +374,9 @@ function autoSaveProjectMemory(
       return !isDuplicate;
     });
     const allEntries = [entry, ...filtered].slice(0, 20);
-    const newBody = allEntries.join('\n\n') + '\n';
+    const newBody = allEntries.join('\n\n');
 
-    // Write with frontmatter
-    const frontmatter = [
-      '---',
-      'label: project',
-      'description: Project-specific knowledge: commands, architecture, conventions, gotchas.',
-      'limit: 5000',
-      'read_only: false',
-      '---',
-      '',
-    ].join('\n');
-
-    fs.mkdirSync(path.dirname(projectMdPath), { recursive: true });
-    fs.writeFileSync(projectMdPath, frontmatter + newBody, 'utf-8');
+    writeProjectMemoryBody(projectDir, 'project', newBody);
   } catch (error) {
     console.warn('[auto-save-project] Failed:', error instanceof Error ? error.message : error);
   }
@@ -443,8 +427,7 @@ const plugin: Plugin = async (ctx) => {
   // Initialize memory filter from user config
   const memoryFilterConfig = vmConfig?.memoryFilter;
   if (memoryFilterConfig !== undefined) {
-    setVectorMemoryFilterConfig(memoryFilterConfig);
-    setBlockMemoryFilterConfig(memoryFilterConfig);
+    setMemoryFilterConfig(memoryFilterConfig);
   }
   const builtinMcps = createBuiltinMcps(disabledMcps);
 

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.5] - 2026-08-22
+- Refactor: LSP single registry (`lsp/registry.ts`) + single `getLspInstallDir`/`getLanguageFromPath` (`utils/lsp-path.ts`), rename `tools/lsp-manager.LspManager` → `LspStatusManager`, unify installers on same registry
+- Refactor: Memory single filter config (`services/memory-config.ts`), `autoSaveProjectMemory` via block API (filter/limit/read-only), journal filtered, 4-layer doc
+- Refactor: Installer skip-logic single `utils/skip-install.ts` (was 3 copies in tool/lsp/rtk installers)
+
 ## [1.20.3] - 2026-08-22
 - Fix: LSP retry after ready (resolveServerPath via node_modules/.bin), vector init latch + instance assign, agent-booster global npm root detection
 

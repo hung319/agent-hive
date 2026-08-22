@@ -1,6 +1,10 @@
 import * as childProcess from 'child_process';
-import * as path from 'path';
-import * as os from 'os';
+import { LSP_REGISTRY } from '../lsp/registry.js';
+import { getLspNodeBinDir, getLspLegacyBinDir } from '../utils/lsp-path.js';
+import { shouldSkipAutoInstall } from '../utils/skip-install.js';
+
+// Single source of truth for the install dir (re-exported for backward compat)
+export { getLspInstallDir } from '../utils/lsp-path.js';
 
 const execSync = (...args: Parameters<typeof childProcess.execSync>) =>
   (childProcess as unknown as { execSync: typeof childProcess.execSync }).execSync(...args);
@@ -16,45 +20,36 @@ interface LspServerDef {
 }
 
 /**
- * Get the local LSP install directory (~/.config/opencode/hive/lsp)
+ * Prepend the local LSP bin directories to PATH
  */
-export function getLspInstallDir(): string {
-  return path.join(os.homedir(), '.config', 'opencode', 'hive', 'lsp');
+export function prependLspToPath(): void {
+  process.env.PATH = `${getLspNodeBinDir()}:${getLspLegacyBinDir()}:${process.env.PATH}`;
 }
 
 /**
- * Prepend the local LSP bin directory to PATH
+ * Languages proactively installed at startup (fire-and-forget).
+ * Definitions are derived from the shared LSP registry — do not
+ * maintain a separate table here.
  */
-export function prependLspToPath(): void {
-  const installDir = getLspInstallDir();
-  const binDir = path.join(installDir, 'node_modules', '.bin');
-  const legacyBinDir = path.join(installDir, 'bin');
-  process.env.PATH = `${binDir}:${legacyBinDir}:${process.env.PATH}`;
-}
+const STARTUP_LANGUAGES = ['typescript', 'python', 'go', 'rust'] as const;
 
-const LSP_SERVERS: LspServerDef[] = [
-  {
-    name: 'TypeScript',
-    checkCommand: `${path.join(getLspInstallDir(), 'node_modules', '.bin')}/typescript-language-server --version`,
-    installCommand: `npm install --prefix ${getLspInstallDir()} typescript-language-server typescript`,
-  },
-  {
-    name: 'Python',
-    checkCommand: 'pyright --version',
-    installCommand: 'uv pip install --user pyright',
-    fallbackCommand: 'pip install --user pyright',
-  },
-  {
-    name: 'Go',
-    checkCommand: 'gopls version',
-    installCommand: 'go install golang.org/x/tools/gopls@latest',
-  },
-  {
-    name: 'Rust',
-    checkCommand: 'rust-analyzer --version',
-    installCommand: 'rustup component add rust-analyzer',
-  },
-];
+const LSP_SERVERS: LspServerDef[] = (() => {
+  const defs: LspServerDef[] = [];
+  for (const lang of STARTUP_LANGUAGES) {
+    const entry = LSP_REGISTRY[lang];
+    const install = entry?.install;
+    if (!entry || !install || !install.verifyCommand) {
+      throw new Error(`[lsp-autoinstall] Invalid registry entry for startup language: ${lang}`);
+    }
+    defs.push({
+      name: entry.displayName,
+      checkCommand: install.verifyCommand,
+      installCommand: [install.command, ...install.args].join(' '),
+      fallbackCommand: entry.startupFallbackCommand,
+    });
+  }
+  return defs;
+})();
 
 export interface LspServerResult {
   name: string;
@@ -101,21 +96,17 @@ function installServer(def: LspServerDef): boolean {
   return false;
 }
 
-function shouldSkipLspInstall(): boolean {
-  return (
-    process.env.HIVE_DISABLE_AUTO_INSTALL === '1' ||
-    process.env.HIVE_DISABLE_AUTO_INSTALL === 'true' ||
-    (process.env.HOME !== undefined && process.env.HOME.includes('hive-e2e'))
-  );
-}
-
 /**
  * Proactively check and install LSP servers at startup.
  * Fire-and-forget: callers can await or not.
  * Never throws — all errors are caught and logged.
+ *
+ * This is the batch/startup flavor of the installer; on-demand installs
+ * go through `ensureLspInstalled` in tools/lsp-manager.ts. Both read the
+ * same shared registry (`../lsp/registry.ts`) and install dir helpers.
  */
 export async function ensureLspServers(): Promise<LspServerResult[]> {
-  if (shouldSkipLspInstall()) {
+  if (shouldSkipAutoInstall()) {
     return [];
   }
   const results: LspServerResult[] = [];
