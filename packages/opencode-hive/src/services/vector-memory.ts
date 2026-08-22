@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { getHiveNodeModulesPath } from '../utils/tool-installer.js';
+import { getHiveNodeModulesPath, getGlobalNpmRoot } from '../utils/tool-installer.js';
 import { filterSensitiveData } from '../utils/sensitive-data-filter.js';
 import { safeStageAsync } from '../utils/safe-stage.js';
 import { setMemoryFilterConfig, getMemoryFilterConfig } from './memory-config.js';
@@ -111,11 +111,23 @@ async function initMemory(options?: {
   
   memoryInitPromise = (async () => {
     try {
-      // Dynamic require - try hive packages first, fall back to normal resolution
       const hiveModules = getHiveNodeModulesPath();
       const hivePkgPath = path.join(hiveModules, '@sparkleideas/memory');
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const memory = fs.existsSync(hivePkgPath) ? require(hivePkgPath) : require('@sparkleideas/memory');
+      let memory: any;
+      if (fs.existsSync(hivePkgPath)) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        memory = require(hivePkgPath);
+      } else {
+        const globalRoot = getGlobalNpmRoot();
+        const globalPkgPath = globalRoot ? path.join(globalRoot, '@sparkleideas/memory') : '';
+        if (globalPkgPath && fs.existsSync(globalPkgPath)) {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          memory = require(globalPkgPath);
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          memory = require('@sparkleideas/memory');
+        }
+      }
       
       // Initialize with options
       const indexPath = options?.indexPath || path.join(os.homedir(), '.config', 'opencode', 'hive', 'vector-index');

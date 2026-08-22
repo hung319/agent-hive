@@ -75,7 +75,7 @@ export const LSP_REGISTRY: Record<string, LspRegistryEntry> = {
     args: ['--stdio'],
     install: {
       command: 'npm',
-      args: ['install', '--prefix', installDir, 'typescript-language-server', 'typescript'],
+      args: ['install', '--prefix', installDir, 'typescript-language-server', 'typescript@^5'],
       verifyCommand: `${path.join(nodeBinDir, 'typescript-language-server')} --version`,
     },
     alternatives: [

@@ -45,16 +45,31 @@ export function getHiveBinPath(): string {
 let cachedGlobalRoot: string | null | undefined;
 
 /**
- * Global npm root from `npm root -g`, cached for process lifetime (null when unavailable).
+ * Global npm root from `npm root -g` (plus bun/pnpm fallbacks), cached for process lifetime (null when unavailable).
  */
 export function getGlobalNpmRoot(): string | null {
   if (cachedGlobalRoot !== undefined) return cachedGlobalRoot;
-  try {
-    const out = execSync('npm root -g', { encoding: 'utf-8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-    cachedGlobalRoot = out.length > 0 && fs.existsSync(out) ? out : null;
-  } catch {
-    cachedGlobalRoot = null;
+  const candidates: string[] = [];
+  const tryCmd = (cmd: string): string | null => {
+    try {
+      const out = execSync(cmd, { encoding: 'utf-8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      if (out && fs.existsSync(out)) return out;
+    } catch {}
+    return null;
+  };
+  candidates.push(tryCmd('npm root -g') ?? '');
+  candidates.push(tryCmd('bun pm bin -g 2>/dev/null | xargs dirname 2>/dev/null') ?? '');
+  candidates.push(tryCmd('pnpm root -g 2>/dev/null') ?? '');
+  // bun global install often uses ~/.bun/install/global/node_modules
+  const bunGlobal = path.join(os.homedir(), '.bun', 'install', 'global', 'node_modules');
+  if (fs.existsSync(bunGlobal)) candidates.push(bunGlobal);
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) {
+      cachedGlobalRoot = c;
+      return cachedGlobalRoot;
+    }
   }
+  cachedGlobalRoot = null;
   return cachedGlobalRoot;
 }
 
@@ -96,6 +111,17 @@ export function isToolAvailable(name: string): boolean {
  * CLI Tools get binaries symlinked to hive/bin/ for PATH access.
  */
 export async function ensureToolsInstalled(): Promise<{ installed: string[]; failed: string[] }> {
+  // Cleanup stale binaries from removed tools (e.g. dora after 1.20.1)
+  try {
+    const staleBins = ['dora'];
+    for (const bin of staleBins) {
+      const p = path.join(BIN_DIR, bin);
+      if (fs.existsSync(p)) {
+        fs.unlinkSync(p);
+        console.log(`[hive:installer] Removed stale bin: ${bin}`);
+      }
+    }
+  } catch {}
   if (shouldSkipAutoInstall()) {
     return { installed: [], failed: [] };
   }

@@ -109,6 +109,26 @@ export async function ensureLspServers(): Promise<LspServerResult[]> {
   if (shouldSkipAutoInstall()) {
     return [];
   }
+  // One-time downgrade: typescript 7 (Go port) is incompatible with typescript-language-server 6.x.
+  // Skip in tests (Bun test mocks execSync and has real TS7 on disk, which would break call-count assertions).
+  const isTestRun = process.argv.some(a => a.includes('test')) || process.env.NODE_ENV === 'test' || !!process.env.BUN_TEST;
+  if (!isTestRun) {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+      const lspPkgJson = path.join(os.homedir(), '.config', 'opencode', 'hive', 'lsp', 'node_modules', 'typescript', 'package.json');
+      if (fs.existsSync(lspPkgJson)) {
+        const ver = JSON.parse(fs.readFileSync(lspPkgJson, 'utf-8')).version as string;
+        if (ver && ver.startsWith('7.')) {
+          console.warn(`[lsp-autoinstall] Detected incompatible TypeScript ${ver} (needs ^5 for language-server 6.x), downgrading to 5.9.3...`);
+          const lspDir = path.join(os.homedir(), '.config', 'opencode', 'hive', 'lsp');
+          const { execSync: es } = await import('child_process');
+          try { es(`npm install --prefix ${lspDir} typescript@5.9.3 --save 2>&1`, { stdio: 'inherit', timeout: 120000 }); } catch {}
+        }
+      }
+    } catch {}
+  }
   const results: LspServerResult[] = [];
 
   for (const server of LSP_SERVERS) {

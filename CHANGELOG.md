@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.6] - 2026-08-22
+- Fix: LSP pin `typescript@^5` (was `typescript@latest` → 7.0.2 Go port breaks language-server 6.x) + auto-downgrade check in `lsp-autoinstall` (detect 7.x → reinstall 5.9.3)
+- Fix: Vector/booster global resolve — `tool-installer.getGlobalNpmRoot` tries `npm root -g` + bun/pnpm fallbacks + `~/.bun/install/global`, `vector-memory` also checks global root (was hive-only), stable HNSW vs fallback
+- Chore: `tool-installer` auto-cleans stale `bin/dora` on next install
+
 ## [1.20.5] - 2026-08-22
 - Refactor: LSP single registry (`lsp/registry.ts`) + single `getLspInstallDir`/`getLanguageFromPath` (`utils/lsp-path.ts`), rename `tools/lsp-manager.LspManager` → `LspStatusManager`, unify installers on same registry
 - Refactor: Memory single filter config (`services/memory-config.ts`), `autoSaveProjectMemory` via block API (filter/limit/read-only), journal filtered, 4-layer doc
