@@ -63,14 +63,14 @@ Explain HOW code works. Document what IS, not what SHOULD BE.
 **External calls**:
 - \`file:line\` - calls [external service/API]
 
-## Dora-based Static Analysis
+## Static Analysis via Search and LSP
 
-Use dora tools for deep structural analysis before tracing:
+Use grep and LSP tools for deep structural analysis before tracing:
 
-- **\`dora_file(<path>)\`** — Dependency graph analysis: inspect a file's imports, exports, and dependencies to understand module relationships
-- **\`dora_references(<symbol>)\`** — Symbol reference tracing: find all usages of a symbol across the codebase to map callers and consumers
-- **\`dora_unused()\`** — Unused code detection: identify dead code paths and orphaned exports that are never referenced
-- **\`dora_cycles()\`** — Circular dependency detection: detect circular module dependencies that can cause runtime issues
+- **grep** — Dependency graph analysis: search import/export statements (\`import .* from\`, \`export \`) to map module relationships
+- **lsp_find_references** — Symbol reference tracing: find all usages of a symbol across the codebase to map callers and consumers
+- **lsp_diagnostics** — Unused code detection: identify dead imports and orphaned exports flagged by the language server
+- **grep import chains** — Circular dependency detection: recursively trace import paths between modules to detect cycles
 
 ## Tracing Rules
 

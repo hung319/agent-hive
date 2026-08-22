@@ -16,7 +16,6 @@ const FREE_MODEL_TOOLS = [
   'btca_ask',            // Hardware control (doesn't need AI)
   'hive_rename',          // Simple renaming
   'lsp_status',           // Status check
-  'dora_status',          // Status check
   'auto_cr_status',       // Status check
   'auto_cr_rules',        // List rules
   'code_search_index',    // Index build (no AI needed)
@@ -133,9 +132,6 @@ export const TOOL_CATEGORIES: Record<string, 'free' | 'standard' | 'premium'> = 
   'hive_rename': 'free',
   'lsp_status': 'free',
   'lsp_install': 'free',
-  'dora_status': 'free',
-  'dora_cycles': 'free',
-  'dora_unused': 'free',
   'auto_cr_status': 'free',
   'auto_cr_rules': 'free',
   'hive_memory_list': 'free',
@@ -151,9 +147,6 @@ export const TOOL_CATEGORIES: Record<string, 'free' | 'standard' | 'premium'> = 
   'lsp_diagnostics': 'standard',
   'lsp_hover': 'standard',
   'lsp_code_actions': 'standard',
-  'dora_symbol': 'standard',
-  'dora_file': 'standard',
-  'dora_references': 'standard',
   'auto_cr_scan': 'standard',
   'auto_cr_diff': 'standard',
   'ast_grep_find_code': 'standard',
@@ -165,6 +158,7 @@ export const TOOL_CATEGORIES: Record<string, 'free' | 'standard' | 'premium'> = 
   'call_graph_extract': 'standard',
   'hive_memory_set': 'standard',
   'hive_memory_recall': 'standard',
+  'hive_memory_create': 'standard',
   'hive_vector_search': 'standard',
   
   // Premium - Complex operations that benefit from better models

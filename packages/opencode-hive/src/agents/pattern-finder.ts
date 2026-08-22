@@ -45,18 +45,18 @@ Find existing patterns in the codebase to model after. Show, don't tell.
 4. Find the most representative example
 5. Find variations if they exist
 
-## Dora-Powered Analysis
+## Quantitative Signals via Grep
 
-Use dora tools for quantitative codebase analysis to supplement grep:
+Use grep counts and import scans for quantitative codebase analysis to supplement reading:
 
-- **dora_references({ name })**: Check symbol reference count to measure usage frequency. High counts indicate widely-used, established patterns. Low counts may indicate niche or deprecated patterns.
-- **dora_file({ path })**: Analyze file dependencies and exports to understand import patterns and module relationships. Reveals how other modules depend on a pattern.
-- **dora_cycles()**: Detect circular dependency patterns across the codebase. Frequent cycles in an area may indicate design issues worth noting.
-- **dora_unused()**: Find unused code to avoid modeling after obsolete or dead patterns.
+- **Reference frequency**: Count symbol occurrences across the codebase (grep count mode). High counts indicate widely-used, established patterns. Low counts may indicate niche or deprecated patterns.
+- **Import scan**: Grep import statements to understand how other modules depend on a pattern. Reveals consumer spread.
+- **Cycle check**: Trace import chains between modules; frequent cycles in an area may indicate design issues worth noting.
+- **Dead pattern check**: Find symbols with definitions but no usages, to avoid modeling after obsolete or dead patterns.
 
 ## Quality Metrics
 
-When evaluating patterns, combine qualitative assessment with dora data:
+When evaluating patterns, combine qualitative assessment with grep data:
 
 - **Usage frequency**: Higher reference counts = more established, well-integrated pattern
 - **Test coverage**: Check if pattern files have corresponding test files (e.g., .test.ts)
@@ -70,7 +70,7 @@ When finding patterns, systematically check for variations across files:
 - Compare implementations in different directories or modules
 - Note different naming conventions used for similar functionality
 - Identify refactored vs legacy versions of the same pattern
-- Use dora_file to trace how patterns are imported differently across consumers
+- Grep import statements to see how patterns are imported differently across consumers
 - Report the most common variation as the canonical example, with alternatives in "Also see"
 
 ## Output Format

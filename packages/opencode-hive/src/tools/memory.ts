@@ -586,7 +586,7 @@ function parseTypedMemoryLine(line: string): TypedMemory | null {
   const tsMatch = line.match(/ts=([^\s]+)/);
   const typeMatch = line.match(/type=([^\s]+)/);
   const scopeMatch = line.match(/scope=([^\s]+)/);
-  const contentMatch = line.match(/content="([^"]*(?:\\"[^"]*)*)"/);
+  const contentMatch = line.match(/content="((?:[^"\\]|\\.)*)"/);
   const issueMatch = line.match(/issue=([^\s]+)/);
   const tagsMatch = line.match(/tags=([^\s]+)/);
 
@@ -708,7 +708,7 @@ export const hiveMemoryRecallTool: ToolDefinition = tool({
 
     if (!allMemories.length) {
       return JSON.stringify({
-        message: 'No typed memories found. Use hive_memory_set to create one.',
+        message: 'No typed memories found. Use hive_memory_create to add one, or hive_memory_update to create one (it will upsert).',
         total: 0,
         results: [],
       }, null, 2);
@@ -761,8 +761,54 @@ export const hiveMemoryRecallTool: ToolDefinition = tool({
   },
 });
 
+export const hiveMemoryCreateTool: ToolDefinition = tool({
+  description: 'Create a new typed memory entry (decision, learning, preference, blocker, context, pattern). Appends to today\'s typed-memory file. Use hive_memory_recall to retrieve.',
+  args: {
+    scope: tool.schema.string().describe('Scope of the memory (e.g., project, user, auth, api)'),
+    type: tool.schema.enum(['decision', 'learning', 'preference', 'blocker', 'context', 'pattern']).describe('Type of memory'),
+    content: tool.schema.string().describe('Memory content'),
+    issue: tool.schema.string().optional().describe('Related issue identifier (e.g., BUG-123)'),
+    tags: tool.schema.array(tool.schema.string()).optional().describe('Tags for categorization'),
+  },
+  async execute({ scope, type, content, issue, tags }) {
+    await ensureTypedMemoryDir();
+
+    const filteredContent = filterSensitiveData(content, memoryFilterConfig);
+    const ts = new Date().toISOString();
+    const safeScope = scope.trim().replace(/\s+/g, '-');
+    const safeIssue = issue?.trim().replace(/\s+/g, '-');
+    const safeTags = tags?.map(t => t.trim().replace(/[\s,]/g, '-')).filter(Boolean);
+
+    const parts = [
+      `ts=${ts}`,
+      `type=${type}`,
+      `scope=${safeScope}`,
+      `content="${filteredContent.replace(/"/g, '\\"')}"`,
+    ];
+    if (safeIssue) parts.push(`issue=${safeIssue}`);
+    if (safeTags && safeTags.length > 0) parts.push(`tags=${safeTags.join(',')}`);
+    const line = parts.join(' ');
+
+    const file = getTypedMemoryFile();
+    const existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : '';
+    const prefix = existing.length > 0 && !existing.endsWith('\n') ? existing + '\n' : existing;
+    fs.writeFileSync(file, prefix + line + '\n');
+
+    return JSON.stringify({
+      success: true,
+      created: true,
+      scope: safeScope,
+      type,
+      content: filteredContent,
+      issue: safeIssue,
+      tags: safeTags,
+      message: `Created ${type} memory in ${safeScope}. Retrieve with hive_memory_recall.`,
+    }, null, 2);
+  },
+});
+
 export const hiveMemoryUpdateTool: ToolDefinition = tool({
-  description: 'Update a typed memory entry. Finds by scope and type, updates content.',
+  description: 'Update a typed memory entry. Finds by scope and type, updates content. If no matching memory exists, creates a new one (upsert).',
   args: {
     scope: tool.schema.string().describe('Scope of memory to update'),
     type: tool.schema.enum(['decision', 'learning', 'preference', 'blocker', 'context', 'pattern']).describe('Type of memory'),
@@ -773,9 +819,21 @@ export const hiveMemoryUpdateTool: ToolDefinition = tool({
     const matches = await findTypedMemories(scope, type);
 
     if (matches.length === 0) {
+      await ensureTypedMemoryDir();
+      const ts = new Date().toISOString();
+      const file = getTypedMemoryFile();
+      const line = `ts=${ts} type=${type} scope=${scope} content="${content.replace(/"/g, '\\"')}"`;
+      const existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : '';
+      const prefix = existing.length > 0 && !existing.endsWith('\n') ? existing + '\n' : existing;
+      fs.writeFileSync(file, prefix + line + '\n');
+
       return JSON.stringify({
-        success: false,
-        error: `No memories found for ${type} in ${scope}`,
+        success: true,
+        created: true,
+        scope,
+        type,
+        content,
+        message: `No existing ${type} in ${scope}; created a new typed memory (upsert)`,
       }, null, 2);
     }
 

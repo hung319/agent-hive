@@ -162,7 +162,7 @@ describe('AST pattern search', () => {
   });
 });
 
-describe('Symbol search (via dora)', () => {
+describe('Symbol search (deprecated dora stub)', () => {
   beforeEach(() => {
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true });
@@ -176,16 +176,13 @@ describe('Symbol search (via dora)', () => {
     }
   });
 
-  test('doraSymbolSearch: returns empty with hint when dora not installed', async () => {
+  test('doraSymbolSearch: returns empty results with hint (dora removed)', async () => {
     const { doraSymbolSearch } = await import('./code-search.js');
     const result = await doraSymbolSearch('myFunction');
 
-    // dora may or may not be installed, but result should always have this shape
-    expect(result).toHaveProperty('results');
-    expect(Array.isArray(result.results)).toBe(true);
-    if (!result.success) {
-      expect(result.hint).toBeDefined();
-    }
+    expect(result.success).toBe(false);
+    expect(result.results).toEqual([]);
+    expect(result.hint).toBeDefined();
   });
 });
 

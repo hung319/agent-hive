@@ -1,4 +1,5 @@
 import { tool, type ToolDefinition } from '@opencode-ai/plugin';
+import type { SgNode } from '@ast-grep/napi';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -126,9 +127,10 @@ ast_grep_find_code({ pattern: "export default function $NAME($$$)", lang: "javas
     try {
       const astGrep = await loadAstGrep();
       const { parse, Lang } = astGrep;
-      const searchPath = path.resolve(args.path);
-      const extensions = args.extensions.split(',').map(e => e.trim());
-      const lang = resolveLang(args.lang);
+      const searchPath = path.resolve(args.path ?? '.');
+      const extensions = (args.extensions ?? '.ts,.tsx,.js,.jsx').split(',').map(e => e.trim());
+      const lang = resolveLang(args.lang ?? 'typescript');
+      const maxResults = args.maxResults ?? 50;
 
       const isFile = fs.statSync(searchPath).isFile();
       const files = isFile ? [searchPath] : findFiles(searchPath, extensions, 200);
@@ -136,7 +138,7 @@ ast_grep_find_code({ pattern: "export default function $NAME($$$)", lang: "javas
       const results: Array<{ file: string; line: number; text: string; kind: string }> = [];
 
       for (const filePath of files) {
-        if (results.length >= args.maxResults) break;
+        if (results.length >= maxResults) break;
         try {
           const content = fs.readFileSync(filePath, 'utf-8');
           const fileLang = extToLang(filePath);
@@ -145,7 +147,7 @@ ast_grep_find_code({ pattern: "export default function $NAME($$$)", lang: "javas
           const matches = root.findAll(args.pattern);
 
           for (const match of matches) {
-            if (results.length >= args.maxResults) break;
+            if (results.length >= maxResults) break;
             const range = match.range();
             results.push({
               file: path.relative(process.cwd(), filePath),
@@ -171,6 +173,38 @@ ast_grep_find_code({ pattern: "export default function $NAME($$$)", lang: "javas
 // ============================================================================
 // Tool: ast_grep_rewrite_code
 // ============================================================================
+
+/**
+ * Metavariable token in a rewrite template: `$NAME` or `$$$NAME`.
+ * ast-grep metavars are ALL_CAPS identifiers (`$A`, `$MSG`, `$$$ARGS`).
+ */
+const METAVAR_RE = /(\$\$\$|\$)([A-Z_][A-Z0-9_]*)/g;
+
+/**
+ * Substitute ast-grep metavariables in a rewrite template with captured text.
+ *
+ * @ast-grep/napi's `SgNode.replace()` returns `insertedText` verbatim — it does
+ * NOT expand metavariables (unlike the ast-grep CLI). We resolve each token:
+ * - `$NAME`   -> text of the single node captured by `getMatch(NAME)`
+ * - `$$$NAME` -> original source text spanning all nodes from
+ *   `getMultipleMatches(NAME)` (preserves original separators/spacing)
+ *
+ * Tokens that resolve to nothing (unbound or empty captures) become ''.
+ */
+function substituteRewrite(template: string, match: SgNode, source: string): string {
+  if (!template.includes('$')) return template;
+  return template.replace(METAVAR_RE, (_full, sigil: string, name: string) => {
+    if (sigil === '$$$') {
+      const nodes = match.getMultipleMatches(name);
+      if (nodes.length === 0) return '';
+      const start = nodes[0].range().start.index;
+      const end = nodes[nodes.length - 1].range().end.index;
+      return source.slice(start, end);
+    }
+    const node = match.getMatch(name);
+    return node ? node.text() : '';
+  });
+}
 
 export const astGrepRewriteCodeTool: ToolDefinition = tool({
   description: `Transform code using AST pattern matching and rewrite via ast-grep.
@@ -205,11 +239,13 @@ ast_grep_rewrite_code({
     try {
       const astGrep = await loadAstGrep();
       const { parse } = astGrep;
-      const searchPath = path.resolve(args.path);
-      const extensions = args.extensions.split(',').map(e => e.trim());
+      const searchPath = path.resolve(args.path ?? '.');
+      const extensions = (args.extensions ?? '.ts,.tsx,.js,.jsx').split(',').map(e => e.trim());
 
       const isFile = fs.statSync(searchPath).isFile();
       const files = isFile ? [searchPath] : findFiles(searchPath, extensions, 200);
+
+      const dryRun = args.dryRun ?? true;
 
       const changes: Array<{ file: string; edits: Array<{ start: number; end: number; oldText: string; newText: string }> }> = [];
 
@@ -230,16 +266,19 @@ ast_grep_rewrite_code({
           let newContent = content;
           for (const match of sortedMatches) {
             const edit = match.replace(args.rewrite);
+            // napi's replace() leaves $NAME / $$$NAME unsubstituted in
+            // insertedText — expand captures manually before applying.
+            const newText = substituteRewrite(edit.insertedText, match, content);
             fileEdits.push({
               start: edit.startPos,
               end: edit.endPos,
               oldText: match.text(),
-              newText: edit.insertedText,
+              newText,
             });
-            newContent = newContent.slice(0, edit.startPos) + edit.insertedText + newContent.slice(edit.endPos);
+            newContent = newContent.slice(0, edit.startPos) + newText + newContent.slice(edit.endPos);
           }
 
-          if (!args.dryRun && newContent !== content) {
+          if (!dryRun && newContent !== content) {
             fs.writeFileSync(filePath, newContent, 'utf-8');
           }
 
@@ -252,7 +291,7 @@ ast_grep_rewrite_code({
 
       return JSON.stringify({
         success: true,
-        dryRun: args.dryRun,
+        dryRun,
         filesChanged: changes.length,
         totalEdits: changes.reduce((sum, c) => sum + c.edits.length, 0),
         changes,
@@ -293,8 +332,10 @@ ast_grep_dump_syntax_tree({ path: "src/index.ts", maxDepth: 5 })
       const fileLang = extToLang(filePath);
       const sg = parse(fileLang, content);
 
+      const maxDepth = args.maxDepth ?? 10;
+
       function dumpNode(node: any, depth: number): any {
-        if (depth >= args.maxDepth) return { kind: String(node.kind()), text: '[...]' };
+        if (depth >= maxDepth) return { kind: String(node.kind()), text: '[...]' };
         const result: any = {
           kind: String(node.kind()),
           range: node.range(),
@@ -351,8 +392,8 @@ ast_grep_scan_code({ path: "./src" })
     try {
       const astGrep = await loadAstGrep();
       const { parse } = astGrep;
-      const searchPath = path.resolve(args.path);
-      const extensions = args.extensions.split(',').map(e => e.trim());
+      const searchPath = path.resolve(args.path ?? '.');
+      const extensions = (args.extensions ?? '.ts,.tsx,.js,.jsx').split(',').map(e => e.trim());
 
       const isFile = fs.statSync(searchPath).isFile();
       const files = isFile ? [searchPath] : findFiles(searchPath, extensions, 200);
@@ -446,8 +487,8 @@ ast_grep_analyze_imports({ path: "./src" })
     try {
       const astGrep = await loadAstGrep();
       const { parse } = astGrep;
-      const searchPath = path.resolve(args.path);
-      const extensions = args.extensions.split(',').map(e => e.trim());
+      const searchPath = path.resolve(args.path ?? '.');
+      const extensions = (args.extensions ?? '.ts,.tsx,.js,.jsx').split(',').map(e => e.trim());
 
       const isFile = fs.statSync(searchPath).isFile();
       const files = isFile ? [searchPath] : findFiles(searchPath, extensions, 200);

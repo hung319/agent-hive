@@ -1,36 +1,109 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin";
 import { execSync } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 /**
  * Auto-CR Tool - SWC-based automated code review
- * 
+ *
  * auto-cr-cmd provides fast static analysis for JavaScript/TypeScript.
  * Built-in rules: no-deep-relative-imports, no-circular-dependencies,
  * no-swallowed-errors, no-catastrophic-regex, etc.
  */
 
 /**
+ * The npm package `auto-cr-cmd` exposes its executable as `check`
+ * (not `auto-cr-cmd`), so both names must be probed. Older installs
+ * and the Hive installer alias may still provide `auto-cr-cmd`.
+ */
+const AUTO_CR_COMMAND_CANDIDATES: string[] = (() => {
+  const hiveBinDir = path.join(os.homedir(), '.config', 'opencode', 'hive', 'bin');
+  return [
+    'auto-cr-cmd',
+    'check',
+    `"${path.join(hiveBinDir, 'auto-cr-cmd')}"`,
+    `"${path.join(hiveBinDir, 'check')}"`,
+    'npx --yes auto-cr-cmd',
+  ];
+})();
+
+/** Cached successful resolution (null results are never cached so a
+ *  mid-session install is picked up on the next call). */
+let resolvedAutoCrCommand: string | undefined;
+
+function tryAutoCrCommand(command: string): boolean {
+  // The CLI has no --version flag; --help exits 0 whenever the binary runs.
+  try {
+    execSync(`${command} --help`, {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 30000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve a working auto-cr command prefix.
+ * Tries `auto-cr-cmd`, `check`, the hive bin directory, then `npx` as last resort.
+ * Returns the command to invoke, or null when unavailable.
+ */
+export function resolveAutoCrBinary(): string | null {
+  if (resolvedAutoCrCommand !== undefined) return resolvedAutoCrCommand;
+  for (const candidate of AUTO_CR_COMMAND_CANDIDATES) {
+    if (tryAutoCrCommand(candidate)) {
+      resolvedAutoCrCommand = candidate;
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * Read the installed auto-cr-cmd version from hive package metadata.
+ * The CLI itself has no --version flag.
+ */
+function readAutoCrVersion(): string | undefined {
+  try {
+    const pkgPath = path.join(
+      os.homedir(), '.config', 'opencode', 'hive', 'packages', 'node_modules', 'auto-cr-cmd', 'package.json',
+    );
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: unknown };
+    return typeof pkg.version === 'string' ? pkg.version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Check if auto-cr is installed
  */
 function checkAutoCrStatus(): { installed: boolean; version?: string } {
-  try {
-    const output = execSync('auto-cr-cmd --version', { encoding: 'utf-8' });
-    const version = output.trim();
-    return { installed: true, version };
-  } catch {
+  const command = resolveAutoCrBinary();
+  if (!command) {
     return { installed: false };
   }
+  return { installed: true, version: readAutoCrVersion() };
 }
 
 /**
  * Execute auto-cr command
  */
 function runAutoCr(args: string[]): { success: boolean; output?: string; error?: string; json?: any } {
+  const command = resolveAutoCrBinary();
+  if (!command) {
+    return {
+      success: false,
+      error: 'auto-cr-cmd not found (tried auto-cr-cmd, check, hive bin dir, and npx)',
+    };
+  }
   try {
     // Use JSON output for structured results
     const allArgs = [...args, '--output', 'json'];
-    const output = execSync(`auto-cr-cmd ${allArgs.join(' ')}`, { 
+    const output = execSync(`${command} ${allArgs.join(' ')}`, {
       encoding: 'utf-8',
       maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large codebases
     });
@@ -76,7 +149,10 @@ export const autoCrStatusTool: ToolDefinition = tool({
 npm install auto-cr-cmd
 # or
 pnpm add auto-cr-cmd
-\`\`\``,
+\`\`\`
+
+**Note:** The package installs its binary as \`check\` (not \`auto-cr-cmd\`).
+Both names are detected automatically, including via npx.`,
 
   args: {},
 
@@ -86,8 +162,9 @@ pnpm add auto-cr-cmd
     if (!status.installed) {
       return JSON.stringify({
         status: 'not_installed',
-        message: 'auto-cr-cmd not found',
+        message: 'auto-cr-cmd not found (tried auto-cr-cmd, check, hive bin dir, and npx)',
         installation: 'npm install auto-cr-cmd',
+        hint: 'The package exposes its binary as `check`; both `check` and `auto-cr-cmd` are accepted.',
       }, null, 2);
     }
 
@@ -143,7 +220,7 @@ auto_cr_scan({ path: "./src" })
       return JSON.stringify({
         success: false,
         error: 'auto-cr-cmd not installed',
-        hint: 'npm install auto-cr-cmd',
+        hint: 'npm install auto-cr-cmd (binary is exposed as `check`)',
       }, null, 2);
     }
 
@@ -212,10 +289,14 @@ export const autoCrDiffTool: ToolDefinition = tool({
 
 **Example:**
 \`\`\`bash
-git diff --name-only -z | xargs -0 auto-cr-cmd --stdin --output json
+git diff --name-only -z | xargs -0 check --stdin --output json
 \`\`\`
 
-**Note:** This tool requires git diff output piped via stdin.`,
+**Note:** The npm package exposes its binary as \`check\`. The \`auto-cr-cmd\`
+name also works when the Hive installer created the alias. \`npx auto-cr-cmd\`
+works everywhere.
+
+This tool requires git diff output piped via stdin.`,
 
   args: {
     language: tool.schema.string().optional().default('en').describe('Output language (en or zh)'),
@@ -223,12 +304,12 @@ git diff --name-only -z | xargs -0 auto-cr-cmd --stdin --output json
 
   async execute({ language }) {
     const status = checkAutoCrStatus();
-    
+
     if (!status.installed) {
       return JSON.stringify({
         success: false,
         error: 'auto-cr-cmd not installed',
-        hint: 'npm install auto-cr-cmd',
+        hint: 'npm install auto-cr-cmd (binary is exposed as `check`)',
       }, null, 2);
     }
 

@@ -26,8 +26,9 @@ const TOOLS: ToolEntry[] = [
   { name: '@sparkleideas/agent-booster', category: 'agent' },
   { name: '@sparkleideas/memory', category: 'agent' },
   { name: 'bun-pty', category: 'agent' },
-  { name: '@butttons/dora', category: 'cli', binaries: ['dora'] },
-  { name: 'auto-cr-cmd', category: 'cli', binaries: ['auto-cr-cmd'] },
+  // auto-cr-cmd ships its executable as `check`; `auto-cr-cmd` is kept as an
+  // alias so both names resolve after install.
+  { name: 'auto-cr-cmd', category: 'cli', binaries: ['check', 'auto-cr-cmd'] },
   { name: 'btca', category: 'cli', binaries: ['btca'] },
 ];
 
@@ -108,16 +109,21 @@ export async function ensureToolsInstalled(): Promise<{ installed: string[]; fai
 
     for (const tool of toInstall) {
       if (tool.category === 'cli' && tool.binaries) {
-        for (const bin of tool.binaries) {
-          const source = path.join(NODE_MODULES_DIR, '.bin', bin);
-          const target = path.join(BIN_DIR, bin);
-          if (fs.existsSync(source) && !fs.existsSync(target)) {
-            try {
-              fs.symlinkSync(source, target);
-            } catch {
-              fs.copyFileSync(source, target);
-              fs.chmodSync(target, 0o755);
-            }
+        // Link every declared binary. When a declared bin name is missing from
+        // node_modules/.bin (e.g. `auto-cr-cmd` ships only `check`), alias it
+        // to the first source that exists so both names stay callable.
+        const sources = tool.binaries.map((bin) => path.join(NODE_MODULES_DIR, '.bin', bin));
+        const primarySource = sources.find((src) => fs.existsSync(src));
+        for (let i = 0; i < tool.binaries.length; i++) {
+          const target = path.join(BIN_DIR, tool.binaries[i]);
+          if (fs.existsSync(target)) continue;
+          const linkSource = fs.existsSync(sources[i]) ? sources[i] : primarySource;
+          if (!linkSource) continue;
+          try {
+            fs.symlinkSync(linkSource, target);
+          } catch {
+            fs.copyFileSync(linkSource, target);
+            fs.chmodSync(target, 0o755);
           }
         }
       }

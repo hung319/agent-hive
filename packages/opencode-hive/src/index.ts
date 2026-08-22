@@ -25,7 +25,7 @@ import {
 // Skill-Embedded MCP Tools
 import { skillMcpTool, listSkillMcpsTool } from './tools/skill-mcp.js';
 // Memory Tools
-import { hiveMemoryListTool, hiveMemorySetTool, hiveMemoryReplaceTool, hiveJournalWriteTool, hiveJournalSearchTool, hiveMemoryRecallTool, hiveMemoryUpdateTool, hiveMemoryForgetTool, buildMemoryInjection, ensureMemorySeeded } from './tools/memory.js';
+import { hiveMemoryListTool, hiveMemorySetTool, hiveMemoryReplaceTool, hiveJournalWriteTool, hiveJournalSearchTool, hiveMemoryRecallTool, hiveMemoryCreateTool, hiveMemoryUpdateTool, hiveMemoryForgetTool, buildMemoryInjection, ensureMemorySeeded } from './tools/memory.js';
 // Agent Booster Tools (ultra-fast code editing)
 import { hiveCodeEditTool, hiveLazyEditTool, hiveBoosterStatusTool } from './tools/agent-booster.js';
 // Vector Memory Tools (semantic search)
@@ -40,16 +40,6 @@ import { OpenCodeProviderService } from './services/opencode-provider.js';
 import { UserProfileService } from './services/user-profile.js';
 import { ensureLspServers } from './services/lsp-autoinstall.js';
 
-
-// Dora CLI Tools (SCIP-based code navigation)
-import {
-  doraStatusTool, 
-  doraSymbolTool, 
-  doraFileTool, 
-  doraReferencesTool,
-  doraCyclesTool,
-  doraUnusedTool,
-} from './tools/dora.js';
 
 // Auto-CR Tools (SWC-based code review)
 import { 
@@ -1611,6 +1601,7 @@ ${snapshot}
       hive_memory_replace: hiveMemoryReplaceTool,
       // Typed memory tools (from simple-memory)
       hive_memory_recall: hiveMemoryRecallTool,
+      hive_memory_create: hiveMemoryCreateTool,
       hive_memory_update: hiveMemoryUpdateTool,
       hive_memory_forget: hiveMemoryForgetTool,
       // Journal tools
@@ -1626,14 +1617,6 @@ ${snapshot}
       hive_vector_search: hiveVectorSearchTool,
       hive_vector_add: hiveVectorAddTool,
       hive_vector_status: hiveVectorStatusTool,
-
-      // Dora CLI Tools (SCIP-based code navigation)
-      dora_status: doraStatusTool,
-      dora_symbol: doraSymbolTool,
-      dora_file: doraFileTool,
-      dora_references: doraReferencesTool,
-      dora_cycles: doraCyclesTool,
-      dora_unused: doraUnusedTool,
 
       // Auto-CR Tools (SWC-based code review)
       auto_cr_status: autoCrStatusTool,

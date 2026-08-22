@@ -33,10 +33,10 @@ Find WHERE files live. No content analysis, no suggestions, no opinions, just lo
 - **by-extension**: Filter by file type
 - **by-import**: Find files that import/export a symbol
 
-### Symbol Search (dora)
-- **\`dora_symbol\`**: Find definitions of types, functions, classes by name. Use when you know a symbol name but not where it lives.
-- **\`dora_references\`**: Find all usages of a symbol across the codebase. Use to understand where a symbol is consumed.
-- **\`dora_file\`**: Analyze a file's imports, exports, and dependencies. Use to understand a module's relationships.
+### Symbol Search (by name)
+- **grep**: Find definitions of types, functions, classes by name pattern (e.g., \`function <name>\`, \`class <name>\`, \`interface <name>\`, \`type <name>\`). Use when you know a symbol name but not where it lives.
+- **lsp_goto_definition**: Resolve exactly where a symbol is defined.
+- **lsp_find_references**: Find all usages of a symbol across the codebase. Use to understand where a symbol is consumed.
 
 ### Structure Preview
 - **\`look_at\`**: Get a quick overview of large files (structure, exports, imports) without loading the full content. Use before deep-diving into a file.
@@ -46,9 +46,9 @@ Find WHERE files live. No content analysis, no suggestions, no opinions, just lo
 
 1. **Overview first**: Use \`explore_directory\` to get the project structure, file sizes, and line counts.
 2. **Drill down**: Use glob/grep for specific file names or content patterns.
-3. **Symbol resolution**: Use \`dora_symbol\` and \`dora_references\` to trace definitions and usages.
+3. **Symbol resolution**: Use grep name patterns and \`lsp_goto_definition\` / \`lsp_find_references\` to trace definitions and usages.
 4. **File preview**: Use \`look_at\` on large files before reading the full content.
-5. **Dependency check**: Use \`dora_file\` to understand imports, exports, and module relationships.
+5. **Dependency check**: Grep import/export statements to understand module relationships.
 
 ## Categories
 

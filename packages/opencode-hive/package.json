@@ -55,9 +55,6 @@
     "exa-mcp-server": {
       "optional": true
     },
-    "@butttons/dora": {
-      "optional": true
-    },
     "auto-cr-cmd": {
       "optional": true
     },

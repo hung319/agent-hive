@@ -266,17 +266,21 @@ describe('Scout (Explorer/Researcher) prompt', () => {
 
 describe('Codebase Locator prompt', () => {
   describe('tool usage guidance', () => {
-    it('contains dora_symbol and dora_references for symbol search', () => {
-      expect(CODEBASE_LOCATOR_PROMPT).toContain('dora_symbol');
-      expect(CODEBASE_LOCATOR_PROMPT).toContain('dora_references');
+    it('does not reference removed dora tools', () => {
+      expect(CODEBASE_LOCATOR_PROMPT).not.toContain('dora');
+    });
+
+    it('contains grep and LSP guidance for symbol search', () => {
+      expect(CODEBASE_LOCATOR_PROMPT).toContain('lsp_goto_definition');
+      expect(CODEBASE_LOCATOR_PROMPT).toContain('lsp_find_references');
     });
 
     it('contains look_at for structure preview of large files', () => {
       expect(CODEBASE_LOCATOR_PROMPT).toContain('look_at');
     });
 
-    it('contains dora_file for dependency analysis', () => {
-      expect(CODEBASE_LOCATOR_PROMPT).toContain('dora_file');
+    it('contains grep import guidance for dependency analysis', () => {
+      expect(CODEBASE_LOCATOR_PROMPT).toContain('import/export statements');
     });
 
     it('contains explore_directory for project overview', () => {
@@ -301,25 +305,28 @@ describe('Hygienic (Consultant/Reviewer) prompt', () => {
 });
 
 describe('Codebase Analyzer (Micode) prompt', () => {
-  describe('dora-based static analysis', () => {
-    it('contains dependency graph analysis via dora_file', () => {
-      expect(CODEBASE_ANALYZER_PROMPT).toContain('dora_file');
+  describe('static analysis guidance', () => {
+    it('does not reference removed dora tools', () => {
+      expect(CODEBASE_ANALYZER_PROMPT).not.toContain('dora');
+    });
+
+    it('contains dependency graph analysis via grep imports', () => {
+      expect(CODEBASE_ANALYZER_PROMPT).toContain('grep');
       expect(CODEBASE_ANALYZER_PROMPT).toContain('dependency');
     });
 
-    it('contains symbol reference tracing via dora_references', () => {
-      expect(CODEBASE_ANALYZER_PROMPT).toContain('dora_references');
+    it('contains symbol reference tracing via lsp_find_references', () => {
+      expect(CODEBASE_ANALYZER_PROMPT).toContain('lsp_find_references');
       expect(CODEBASE_ANALYZER_PROMPT).toContain('reference');
     });
 
-    it('contains unused code detection via dora_unused', () => {
-      expect(CODEBASE_ANALYZER_PROMPT).toContain('dora_unused');
-      expect(CODEBASE_ANALYZER_PROMPT).toContain('unused');
+    it('contains unused code detection via lsp_diagnostics', () => {
+      expect(CODEBASE_ANALYZER_PROMPT).toContain('lsp_diagnostics');
+      expect(CODEBASE_ANALYZER_PROMPT).toContain('Unused code detection');
     });
 
-    it('contains circular dependency detection via dora_cycles', () => {
-      expect(CODEBASE_ANALYZER_PROMPT).toContain('dora_cycles');
-      expect(CODEBASE_ANALYZER_PROMPT).toContain('circular');
+    it('contains circular dependency detection via import chain tracing', () => {
+      expect(CODEBASE_ANALYZER_PROMPT).toContain('Circular dependency detection');
     });
   });
 
@@ -339,32 +346,36 @@ describe('Codebase Analyzer (Micode) prompt', () => {
 });
 
 describe('Pattern Finder prompt', () => {
-  it('contains dora_references tool guidance for symbol reference frequency analysis', () => {
-    expect(PATTERN_FINDER_PROMPT).toContain('dora_references');
+  it('does not reference removed dora tools', () => {
+    expect(PATTERN_FINDER_PROMPT).not.toContain('dora');
   });
 
-  it('contains dora_file tool guidance for import pattern analysis', () => {
-    expect(PATTERN_FINDER_PROMPT).toContain('dora_file');
+  it('contains grep-based reference frequency guidance for symbol usage analysis', () => {
+    expect(PATTERN_FINDER_PROMPT).toContain('Reference frequency');
   });
 
-  it('contains dora_cycles tool guidance for code cycle patterns', () => {
-    expect(PATTERN_FINDER_PROMPT).toContain('dora_cycles');
+  it('contains import scan guidance for import pattern analysis', () => {
+    expect(PATTERN_FINDER_PROMPT).toContain('Import scan');
   });
 
-  it('contains dora_unused tool guidance for unused code patterns', () => {
-    expect(PATTERN_FINDER_PROMPT).toContain('dora_unused');
+  it('contains cycle check guidance for code cycle patterns', () => {
+    expect(PATTERN_FINDER_PROMPT).toContain('Cycle check');
+  });
+
+  it('contains dead pattern check guidance for unused code patterns', () => {
+    expect(PATTERN_FINDER_PROMPT).toContain('Dead pattern check');
   });
 
   it('contains usage frequency metrics guidance', () => {
-    expect(PATTERN_FINDER_PROMPT).toContain('usage frequency');
+    expect(PATTERN_FINDER_PROMPT).toContain('Usage frequency');
   });
 
   it('contains dedicated Variation Detection section for cross-file pattern comparison', () => {
     expect(PATTERN_FINDER_PROMPT).toContain('## Variation Detection');
   });
 
-  it('contains Dora-Powered Analysis section header', () => {
-    expect(PATTERN_FINDER_PROMPT).toContain('## Dora-Powered Analysis');
+  it('contains Quantitative Signals section header', () => {
+    expect(PATTERN_FINDER_PROMPT).toContain('## Quantitative Signals via Grep');
   });
 
   it('contains Quality Metrics section header', () => {

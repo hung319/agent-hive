@@ -285,47 +285,24 @@ export async function astGrepSearch(
 }
 
 // ============================================================================
-// Symbol Search (via dora CLI)
+// Symbol Search (DEPRECATED — dora CLI removed)
 // ============================================================================
 
+/**
+ * Deprecated: dora CLI removed. Always returns empty results so callers get a
+ * stable shape; search falls back to BM25 + AST only.
+ */
 export async function doraSymbolSearch(name: string): Promise<{
   success: boolean;
   results: SearchResult[];
   hint?: string;
 }> {
-  try {
-    const { execSync } = await import('child_process');
-    const output = execSync(`dora symbol "${name}"`, {
-      encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 10_000,
-    });
-
-    const lines = output.trim().split('\n').filter(l => l.length > 0);
-    const results: SearchResult[] = [];
-
-    for (const line of lines) {
-      // dora output format: "path:line:col symbol kind"
-      const match = line.match(/^(.+?):(\d+):(\d+)\s+(.+)$/);
-      if (match) {
-        results.push({
-          file: match[1],
-          line: parseInt(match[2], 10),
-          column: parseInt(match[3], 10),
-          snippet: match[4],
-          score: 0.8,
-        });
-      }
-    }
-
-    return { success: true, results };
-  } catch {
-    return {
-      success: false,
-      results: [],
-      hint: 'Install dora for symbol search: bun install -g @butttons/dora',
-    };
-  }
+  void name;
+  return {
+    success: false,
+    results: [],
+    hint: 'dora symbol search has been removed; use BM25 + AST results from code_search instead',
+  };
 }
 
 // ============================================================================
@@ -467,7 +444,6 @@ export const codeSearchTool: ToolDefinition = tool({
 **Search strategies:**
 1. **BM25** — Keyword relevance ranking
 2. **AST pattern** — Structural code matching via @ast-grep/napi
-3. **Symbol** — SCIP-based symbol search via dora (optional)
 
 Results are deduplicated and ranked by combined score across all strategies.
 

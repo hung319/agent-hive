@@ -19,7 +19,7 @@ Add `@hung319/opencode-hive` to your `opencode.json`:
 
 That's it. On first load, Hive auto-installs:
 - **Agent Tools**: `@sparkleideas/agent-booster` (52x faster code editing), `@sparkleideas/memory` (vector memory)
-- **CLI Tools**: `dora` (SCIP code navigation), `auto-cr-cmd` (automated code review), `btca` (Bluetooth Classic Audio)
+- **CLI Tools**: `auto-cr-cmd` (automated code review), `btca` (Bluetooth Classic Audio)
 - **RTK binary**: 60-90% token reduction by filtering shell output (100+ hand-tuned command filters)
 
 All tools fall back gracefully if installation fails — nothing breaks.

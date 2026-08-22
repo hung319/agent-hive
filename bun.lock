@@ -19,7 +19,7 @@
     },
     "packages/opencode-hive": {
       "name": "@hung319/opencode-hive",
-      "version": "1.17.0",
+      "version": "1.20.0",
       "dependencies": {
         "@ast-grep/napi": "^0.44.0",
         "simple-git": "^3.36.0",
@@ -34,7 +34,6 @@
         "typescript": "^5.9.3",
       },
       "peerDependencies": {
-        "@butttons/dora": "*",
         "@opencode-ai/plugin": ">=0.13.7",
         "@openserp/mcp": "*",
         "@sparkleideas/agent-booster": "*",
@@ -45,7 +44,6 @@
         "grep-mcp": "*",
       },
       "optionalPeers": [
-        "@butttons/dora",
         "@openserp/mcp",
         "@sparkleideas/agent-booster",
         "@sparkleideas/memory",

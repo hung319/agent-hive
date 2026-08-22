@@ -271,7 +271,6 @@ Plan-first development: Write plan → User reviews → Approve → Execute task
 
 **Regular tools** (available to ALL agents, no filter):
 - `explore_directory` — Structured directory tree overview with .gitignore filtering, binary detection, content preview
-- `dora_*` — SCIP-based code analysis (symbol, references, file, cycles, unused)
 - `look_at` — Smart file structure extractor for large files
 - LSP tools — goto_definition, find_references, hover, rename, diagnostics
 
