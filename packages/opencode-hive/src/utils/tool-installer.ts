@@ -19,12 +19,13 @@ const BIN_DIR = path.join(HIVE_DIR, 'bin');
 
 interface ToolEntry {
   name: string;
+  version?: string;
   category: 'agent' | 'cli';
   binaries?: string[];
 }
 
 const TOOLS: ToolEntry[] = [
-  { name: '@sparkleideas/agent-booster', category: 'agent' },
+  { name: '@sparkleideas/agent-booster', version: '0.2.34', category: 'agent' },
   { name: '@sparkleideas/memory', category: 'agent' },
   { name: 'bun-pty', category: 'agent' },
   // auto-cr-cmd ships its executable as `check`; `auto-cr-cmd` is kept as an
@@ -74,13 +75,25 @@ export function getGlobalNpmRoot(): string | null {
 }
 
 /** Check if an npm module is resolvable from the hive packages, global install, or normal require. */
-function isModuleResolvable(name: string): boolean {
+function isModuleResolvable(name: string, requiredVersion?: string): boolean {
+  const checkVersion = (pkgPath: string): boolean => {
+    if (!requiredVersion) return true;
+    try {
+      const ver = JSON.parse(fs.readFileSync(path.join(pkgPath, 'package.json'), 'utf-8')).version as string;
+      return ver === requiredVersion;
+    } catch { return false; }
+  };
   const hivePath = path.join(NODE_MODULES_DIR, name);
-  if (fs.existsSync(hivePath)) return true;
+  if (fs.existsSync(hivePath) && checkVersion(hivePath)) return true;
   const globalRoot = getGlobalNpmRoot();
-  if (globalRoot && fs.existsSync(path.join(globalRoot, name))) return true;
+  const globalPath = globalRoot ? path.join(globalRoot, name) : '';
+  if (globalPath && fs.existsSync(globalPath) && checkVersion(globalPath)) return true;
   try {
-    require.resolve(name);
+    const resolved = require.resolve(path.join(name, 'package.json'));
+    if (requiredVersion) {
+      const ver = JSON.parse(fs.readFileSync(resolved, 'utf-8')).version as string;
+      return ver === requiredVersion;
+    }
     return true;
   } catch {
     return false;
@@ -101,7 +114,7 @@ function isCliAvailable(binary: string): boolean {
 export function isToolAvailable(name: string): boolean {
   const tool = TOOLS.find(t => t.name === name);
   if (!tool) return isModuleResolvable(name) || isCliAvailable(name);
-  if (tool.category === 'agent') return isModuleResolvable(tool.name);
+  if (tool.category === 'agent') return isModuleResolvable(tool.name, tool.version);
   return (tool.binaries ?? []).some(b => isCliAvailable(b));
 }
 
@@ -138,7 +151,7 @@ export async function ensureToolsInstalled(): Promise<{ installed: string[]; fai
   fs.mkdirSync(PACKAGES_DIR, { recursive: true });
   fs.mkdirSync(BIN_DIR, { recursive: true });
 
-  const packageNames = toInstall.map(t => t.name);
+  const packageNames = toInstall.map(t => t.version ? `${t.name}@${t.version}` : t.name);
   try {
     await asyncExec(
       `npm install --prefix "${PACKAGES_DIR}" --no-package-lock --no-save ${packageNames.join(' ')}`,

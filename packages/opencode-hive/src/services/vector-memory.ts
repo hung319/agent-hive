@@ -136,26 +136,32 @@ async function initMemory(options?: {
       // Ensure index directory exists
       fs.mkdirSync(indexPath, { recursive: true });
       
-      // Assign memoryInstance in every branch: builds differ (CJS exports
-      // object vs ESM default export), and skipping the assignment left the
-      // service in fallback mode despite successful init.
-      if (memory.default && typeof memory.default.init === 'function') {
-        memoryInstance = memory.default;
-        await memoryInstance.init({
-          indexPath,
-          dimensions,
-        });
-      } else if (typeof memory.init === 'function') {
-        memoryInstance = memory;
-        await memoryInstance.init({
-          indexPath,
-          dimensions,
-        });
+      // Validate API surface: v3 alpha exports classes (UnifiedMemoryService, HNSWIndex)
+      // not the facade {init,add,search}. Without this, Hive assigns the namespace as
+      // instance, reports "HNSW ready", but every add/search throws and silently falls back.
+      const hasFacade = (m: any) =>
+        m && typeof m.add === 'function' && typeof m.search === 'function';
+      let candidate: any = null;
+      if (memory.default && typeof memory.default.init === 'function' && hasFacade(memory.default)) {
+        candidate = memory.default;
+        await candidate.init({ indexPath, dimensions });
+      } else if (typeof memory.init === 'function' && hasFacade(memory)) {
+        candidate = memory;
+        await candidate.init({ indexPath, dimensions });
+      } else if (hasFacade(memory.default)) {
+        candidate = memory.default;
+      } else if (hasFacade(memory)) {
+        candidate = memory;
       } else {
-        memoryInstance = memory;
+        throw new Error(
+          `Incompatible @sparkleideas/memory API (found ${Object.keys(memory).join(',') || 'empty'}; need add/search). ` +
+          `Known good: none on npm (3.0.0-alpha has UnifiedMemoryService/HNSWIndex, 3.5.2-patch.1 tarball missing dist). ` +
+          `Falling back to file-based text search.`
+        );
       }
+      memoryInstance = candidate;
       
-      console.log('[vector-memory] Initialized successfully');
+      console.log('[vector-memory] Initialized successfully (facade validated)');
     } catch (error) {
       console.warn('[vector-memory] Failed to initialize:', error instanceof Error ? error.message : error);
       memoryInstance = null;

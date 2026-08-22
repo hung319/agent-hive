@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.7] - 2026-08-22
+- Fix: Vector false-positive — validate `add/search` facade before reporting HNSW ready (v3 alpha exports classes `UnifiedMemoryService/HNSWIndex`, not facade), fallback to text-search honestly; no compatible `@sparkleideas/memory` on npm (3.5.2-patch.1 tarball missing `dist`)
+- Fix: Booster dist-tag `latest` points to `0.2.2-patch.32` (old), pin `agent-booster@0.2.34` with version-aware `isModuleResolvable` + `npm install --prefix` versioned
+
 ## [1.20.6] - 2026-08-22
 - Fix: LSP pin `typescript@^5` (was `typescript@latest` → 7.0.2 Go port breaks language-server 6.x) + auto-downgrade check in `lsp-autoinstall` (detect 7.x → reinstall 5.9.3)
 - Fix: Vector/booster global resolve — `tool-installer.getGlobalNpmRoot` tries `npm root -g` + bun/pnpm fallbacks + `~/.bun/install/global`, `vector-memory` also checks global root (was hive-only), stable HNSW vs fallback
