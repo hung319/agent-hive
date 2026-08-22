@@ -27,14 +27,15 @@ export function getLspInstallDir(): string {
  */
 export function prependLspToPath(): void {
   const installDir = getLspInstallDir();
-  const binDir = path.join(installDir, 'bin');
-  process.env.PATH = `${binDir}:${process.env.PATH}`;
+  const binDir = path.join(installDir, 'node_modules', '.bin');
+  const legacyBinDir = path.join(installDir, 'bin');
+  process.env.PATH = `${binDir}:${legacyBinDir}:${process.env.PATH}`;
 }
 
 const LSP_SERVERS: LspServerDef[] = [
   {
     name: 'TypeScript',
-    checkCommand: `${path.join(getLspInstallDir(), 'bin')}/typescript-language-server --version`,
+    checkCommand: `${path.join(getLspInstallDir(), 'node_modules', '.bin')}/typescript-language-server --version`,
     installCommand: `npm install --prefix ${getLspInstallDir()} typescript-language-server typescript`,
   },
   {

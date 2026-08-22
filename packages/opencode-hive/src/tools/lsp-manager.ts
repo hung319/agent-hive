@@ -33,13 +33,13 @@ const LSP_DATABASE: Record<string, LspServerConfig> = {
     primary: {
       command: 'npm',
       args: ['install', '--prefix', getLspInstallDir(), 'typescript-language-server', 'typescript'],
-      verifyCommand: `${path.join(getLspInstallDir(), 'bin')}/typescript-language-server --version`,
+      verifyCommand: `${path.join(getLspInstallDir(), 'node_modules', '.bin')}/typescript-language-server --version`,
     },
     alternatives: [
       {
         command: 'npm',
         args: ['install', '--prefix', getLspInstallDir(), '@volarjs/typescript-language-server'],
-        verifyCommand: `${path.join(getLspInstallDir(), 'bin')}/volar-server --version`,
+        verifyCommand: `${path.join(getLspInstallDir(), 'node_modules', '.bin')}/volar-server --version`,
       },
     ],
   },
@@ -137,7 +137,7 @@ const LSP_DATABASE: Record<string, LspServerConfig> = {
     primary: {
       command: 'npm',
       args: ['install', '--prefix', getLspInstallDir(), 'volar'],
-      verifyCommand: `${path.join(getLspInstallDir(), 'bin')}/volar-server --version`,
+      verifyCommand: `${path.join(getLspInstallDir(), 'node_modules', '.bin')}/volar-server --version`,
     },
     alternatives: [],
   },
@@ -146,7 +146,7 @@ const LSP_DATABASE: Record<string, LspServerConfig> = {
     primary: {
       command: 'npm',
       args: ['install', '--prefix', getLspInstallDir(), 'svelte-language-server'],
-      verifyCommand: `${path.join(getLspInstallDir(), 'bin')}/svelte-language-server --version`,
+      verifyCommand: `${path.join(getLspInstallDir(), 'node_modules', '.bin')}/svelte-language-server --version`,
     },
     alternatives: [],
   },

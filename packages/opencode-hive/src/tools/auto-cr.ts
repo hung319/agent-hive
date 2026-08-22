@@ -101,9 +101,12 @@ function runAutoCr(args: string[]): { success: boolean; output?: string; error?:
     };
   }
   try {
-    // Use JSON output for structured results
-    const allArgs = [...args, '--output', 'json'];
-    const output = execSync(`${command} ${allArgs.join(' ')}`, {
+    // Use JSON output for structured results - avoid duplicate --output if caller already supplied it
+    const hasOutput = args.includes('--output') || args.includes('-o');
+    const allArgs = hasOutput ? args : [...args, '--output', 'json'];
+    // Quote args that contain spaces or special chars to survive shell parsing
+    const quoted = allArgs.map(a => (a.includes(' ') || a.includes('"') || a.includes("'") ? `"${a.replace(/"/g, '\\"')}"` : a));
+    const output = execSync(`${command} ${quoted.join(' ')}`, {
       encoding: 'utf-8',
       maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large codebases
     });
@@ -213,7 +216,9 @@ auto_cr_scan({ path: "./src" })
     language: tool.schema.string().optional().default('en').describe('Output language (en or zh)'),
   },
 
-  async execute({ path, language }) {
+  async execute({ path: scanPath, language: lang }) {
+    const scanTarget = scanPath ?? './src';
+    const language = lang ?? 'en';
     const status = checkAutoCrStatus();
     
     if (!status.installed) {
@@ -225,14 +230,14 @@ auto_cr_scan({ path: "./src" })
     }
 
     // Verify path exists
-    if (!fs.existsSync(path)) {
+    if (!fs.existsSync(scanTarget)) {
       return JSON.stringify({
         success: false,
-        error: `Path not found: ${path}`,
+        error: `Path not found: ${scanTarget}`,
       }, null, 2);
     }
 
-    const result = runAutoCr(['--language', language, path]);
+    const result = runAutoCr(['--language', language, '--output', 'json', scanTarget]);
     
     if (!result.success && !result.json) {
       return JSON.stringify({
@@ -246,7 +251,7 @@ auto_cr_scan({ path: "./src" })
       const { summary, files, notifications } = result.json;
       return JSON.stringify({
         success: true,
-        scanned: path,
+        scanned: scanTarget,
         summary: {
           filesScanned: summary?.scannedFiles || 0,
           filesWithErrors: summary?.filesWithErrors || 0,
@@ -272,7 +277,7 @@ auto_cr_scan({ path: "./src" })
     // Fallback to raw output
     return JSON.stringify({
       success: true,
-      scanned: path,
+      scanned: scanTarget,
       rawOutput: result.output,
     }, null, 2);
   },
