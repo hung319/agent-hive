@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-08-23
+- Feat: Codegraph MCP auto-provisioning — installer tải self-contained bundle từ `colbymchenry/codegraph` releases (verify SHA256SUMS) vào `~/.config/opencode/hive/codegraph/<ver>` với marker `current.json`; auto-update mode resolve bản latest qua redirect `releases/latest` (không dùng GitHub API — rate limit), re-check tối đa 1 lần/ngày (TTL 24h), tự upgrade + sweep version dir cũ
+- Feat: MCP `codegraph` chỉ được đăng ký khi binary available (absolute launcher path) — hết lỗi đỏ ENOENT khi thiếu binary; boot chain fire-and-forget install → per-project `init`/`sync`
+- Fix: CI — extract bundle qua argv-array `execFileSync('tar', [...])` thay vì shell-string `execSync` (Bun shell-spawn báo "command not found" trên runners); `isCodegraphOnPath` scan PATH trực tiếp bằng JS (Bun snapshot env lúc startup, child không thấy runtime PATH mutation)
+- Tests: +47 (installer, version parsing, mcp filtering, init flow)
+
 ## [1.20.7] - 2026-08-22
 - Fix: Vector false-positive — validate `add/search` facade before reporting HNSW ready (v3 alpha exports classes `UnifiedMemoryService/HNSWIndex`, not facade), fallback to text-search honestly; no compatible `@sparkleideas/memory` on npm (3.5.2-patch.1 tarball missing `dist`)
 - Fix: Booster dist-tag `latest` points to `0.2.2-patch.32` (old), pin `agent-booster@0.2.34` with version-aware `isModuleResolvable` + `npm install --prefix` versioned
