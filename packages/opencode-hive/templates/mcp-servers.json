@@ -17,6 +17,11 @@
       "command": "npx",
       "args": ["-y", "grep-mcp"],
       "description": "GitHub code search via grep.app"
+    },
+    "codegraph": {
+      "command": "codegraph",
+      "args": ["serve", "--mcp"],
+      "description": "Pre-indexed code knowledge graph. The Hive plugin auto-installs it to ~/.config/opencode/hive; for manual setups install via: curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh"
     }
   }
 }

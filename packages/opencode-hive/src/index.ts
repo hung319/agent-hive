@@ -89,6 +89,8 @@ import { ensureRtkInstalled, isRtkOnPath } from './utils/rtk-installer.js';
 import { ensureToolsInstalled, getHiveBinPath } from './utils/tool-installer.js';
 import { ensureHivePathInShellConfig } from './utils/shell-path.js';
 import { ensureCodegraphInit } from './utils/codegraph-init.js';
+import type { CodegraphInitResult } from './utils/codegraph-init.js';
+import { ensureCodegraphInstalled } from './utils/codegraph-installer.js';
 // $ns Mode & Session Continuation hooks
 import { createNsModeState, detectNsMode, getNsDirective } from './hooks/ns-mode.js';
 import { createContinuationState, getPendingTaskCount, buildContinuationContext } from './hooks/session-continuation.js';
@@ -282,6 +284,7 @@ function prefixWithRtk(command: string, rtkCommand = 'rtk'): string {
 let rtkBootPromise: Promise<string> | null = null;
 let toolsBootPromise: Promise<{ installed: string[]; failed: string[] }> | null = null;
 let lspBootPromise: Promise<import('./services/lsp-autoinstall.js').LspServerResult[]> | null = null;
+let codegraphBootPromise: Promise<CodegraphInitResult> | null = null;
 
 function getRtkBootPromise(): Promise<string> {
   if (!rtkBootPromise) rtkBootPromise = ensureRtkInstalled();
@@ -294,6 +297,22 @@ function getToolsBootPromise(): Promise<{ installed: string[]; failed: string[] 
 function getLspBootPromise(): Promise<import('./services/lsp-autoinstall.js').LspServerResult[]> {
   if (!lspBootPromise) lspBootPromise = ensureLspServers();
   return lspBootPromise;
+}
+
+/**
+ * Fire-and-forget boot chain (task-required contract): never await the
+ * network install here — MCP registration is decided synchronously at config
+ * time, so a freshly installed codegraph enables on the NEXT session.
+ */
+function getCodegraphBootPromise(directory: string): Promise<CodegraphInitResult> {
+  if (!codegraphBootPromise) {
+    codegraphBootPromise = ensureCodegraphInstalled().then((command) =>
+      command
+        ? ensureCodegraphInit(directory, command)
+        : { success: true, action: 'skipped' as const, message: 'codegraph unavailable, skipping auto-init' },
+    );
+  }
+  return codegraphBootPromise;
 }
 
 /**
@@ -397,11 +416,7 @@ const plugin: Plugin = async (ctx) => {
   void getRtkBootPromise().catch(() => {});
   void getToolsBootPromise().catch(() => {});
   void getLspBootPromise().catch(() => {});
-
-  // Auto-init codegraph if available (fire-and-forget, non-blocking)
-  ensureCodegraphInit(directory).catch((err) => {
-    console.warn('[hive:codegraph] Auto-init failed:', err.message);
-  });
+  void getCodegraphBootPromise(directory).catch(() => {});
 
   const featureService = new FeatureService(directory);
   const planService = new PlanService(directory);

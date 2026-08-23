@@ -1,27 +1,26 @@
-import type { LocalMcpConfig } from './types';
+import type { LocalMcpConfig } from './types.js';
 
 /**
  * CodeGraph MCP - Pre-indexed code knowledge graph for semantic code intelligence.
  *
- * Runs `codegraph serve --mcp` locally, which exposes tools:
+ * Runs `<codegraph> serve --mcp` locally, which exposes tools:
  * - codegraph_explore: Query the knowledge graph for symbols, call paths, and blast radius
  *
- * Auto-provisions and auto-inits like oh-my-openagent:
- * - Downloads binary if not present
- * - Runs `codegraph init` on first session start
- * - Global store with symlinks for deduplication
+ * Hive manages the auto-updated CodeGraph bundle (checked at most daily) under
+ * ~/.config/opencode/hive/codegraph on plugin boot; the MCP is registered only
+ * when the binary is available (installed bundle or on PATH), so OpenCode never
+ * spawns a missing binary.
  *
  * 100% local - no API keys needed. Auto-syncs on file changes.
  *
  * @see https://github.com/colbymchenry/codegraph
- * @see oh-my-openagent/packages/utils/src/codegraph/
  */
-export const codegraphMcp: LocalMcpConfig = {
+export const createCodegraphMcp = (codegraphCommand: string): LocalMcpConfig => ({
   type: 'local',
-  command: ['codegraph', 'serve', '--mcp'],
+  command: [codegraphCommand, 'serve', '--mcp'],
   environment: {
     CODEGRAPH_NO_DOWNLOAD: '1',     // prevent self-update, we manage the binary
     CODEGRAPH_TELEMETRY: '0',       // disable telemetry
     DO_NOT_TRACK: '1',
   },
-};
+});

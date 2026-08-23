@@ -3,6 +3,8 @@ import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { getCodegraphCommand } from './codegraph-installer.js';
+
 const execFileAsync = promisify(execFile);
 
 export interface CodegraphInitResult {
@@ -11,17 +13,12 @@ export interface CodegraphInitResult {
   message: string;
 }
 
-/**
- * Check if codegraph is available on PATH
- */
-async function isCodegraphAvailable(): Promise<boolean> {
-  try {
-    await execFileAsync('which', ['codegraph']);
-    return true;
-  } catch {
-    return false;
-  }
-}
+/** Injectable runner so tests can fake init/sync execution. */
+export type CodegraphExecFn = (
+  file: string,
+  args: string[],
+  options: { cwd: string; timeout: number },
+) => Promise<{ stdout: string; stderr: string }>;
 
 /**
  * Check if project has .codegraph directory
@@ -34,20 +31,28 @@ function hasCodegraphIndex(projectRoot: string): boolean {
  * Auto-initialize codegraph for a project.
  *
  * Flow (simplified from oh-my-openagent):
- * 1. Check if codegraph is installed
+ * 1. Resolve the codegraph command (provided, or via the auto-installer:
+ *    installed bundle marker or PATH lookup)
  * 2. Check if .codegraph/ exists
- * 3. If not → run `codegraph init`
- * 4. If yes → run `codegraph sync`
+ * 3. If not → run `<command> init`
+ * 4. If yes → run `<command> sync`
  *
  * @param projectRoot - Project root directory
+ * @param codegraphCommand - Explicit command (defaults to installer resolution)
+ * @param execFn - Runner for init/sync execution (defaults to execFile)
  * @returns Action taken
  */
-export async function ensureCodegraphInit(projectRoot: string): Promise<CodegraphInitResult> {
-  if (!(await isCodegraphAvailable())) {
+export async function ensureCodegraphInit(
+  projectRoot: string,
+  codegraphCommand?: string,
+  execFn: CodegraphExecFn = (file, args, options) => execFileAsync(file, args, options),
+): Promise<CodegraphInitResult> {
+  const command = codegraphCommand || getCodegraphCommand();
+  if (command === '') {
     return {
       success: true,
       action: 'skipped',
-      message: 'codegraph not installed, skipping auto-init',
+      message: 'codegraph install pending, skipping auto-init',
     };
   }
 
@@ -55,7 +60,7 @@ export async function ensureCodegraphInit(projectRoot: string): Promise<Codegrap
     const hasIndex = hasCodegraphIndex(projectRoot);
 
     if (!hasIndex) {
-      await execFileAsync('codegraph', ['init'], { cwd: projectRoot, timeout: 60_000 });
+      await execFn(command, ['init'], { cwd: projectRoot, timeout: 60_000 });
       return {
         success: true,
         action: 'init',
@@ -63,17 +68,17 @@ export async function ensureCodegraphInit(projectRoot: string): Promise<Codegrap
       };
     }
 
-    await execFileAsync('codegraph', ['sync'], { cwd: projectRoot, timeout: 30_000 });
+    await execFn(command, ['sync'], { cwd: projectRoot, timeout: 30_000 });
     return {
       success: true,
       action: 'sync',
       message: 'codegraph sync completed',
     };
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
       action: 'error',
-      message: error.message,
+      message: error instanceof Error ? error.message : String(error),
     };
   }
 }
