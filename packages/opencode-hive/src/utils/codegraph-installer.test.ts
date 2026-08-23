@@ -14,13 +14,27 @@ import {
   ensureCodegraphInstalled,
 } from './codegraph-installer.js';
 
-const realExecSync = childProcess.execSync.bind(childProcess);
+// Invariant: child_process stays unspied here. Passing real `tar` through an
+// execSync spy passthrough recursed on CI runners (RangeError: Maximum call
+// stack size exceeded). Availability is driven via the REAL PATH instead —
+// see withCodegraphOnPath().
 const realFetch = globalThis.fetch;
 const realHome = process.env.HOME;
+const realPathEnv = process.env.PATH;
 
 let sandboxHome = '';
+let pathBinDirs: string[] = [];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+function withCodegraphOnPath(): void {
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-path-bin-'));
+  const shim = path.join(binDir, 'codegraph');
+  fs.writeFileSync(shim, '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(shim, 0o755);
+  pathBinDirs.push(binDir);
+  process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`;
+}
 
 /**
  * Build a tiny codegraph-bundle tar.gz in-memory (one top-level dir, like the
@@ -106,19 +120,11 @@ describe('codegraph-installer', () => {
     vi.clearAllMocks();
     sandboxHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hive-cg-home-'));
     process.env.HOME = sandboxHome;
-    // Default: only real `tar` passes through; everything else (which codegraph) fails,
-    // so the binary is deterministically NOT on PATH.
-    vi.spyOn(childProcess, 'execSync').mockImplementation(((...args: Parameters<typeof childProcess.execSync>) => {
-      const cmd = String(args[0] ?? '');
-      if (cmd.startsWith('tar ')) {
-        return realExecSync(...args);
-      }
-      throw new Error(`command not found: ${cmd.split(' ')[0]}`);
-    }) as typeof childProcess.execSync);
   });
 
   afterEach(() => {
     process.env.HOME = realHome;
+    process.env.PATH = realPathEnv;
     delete process.env.HIVE_DISABLE_AUTO_INSTALL;
     vi.restoreAllMocks();
     globalThis.fetch = realFetch;
@@ -126,6 +132,10 @@ describe('codegraph-installer', () => {
       fs.rmSync(sandboxHome, { recursive: true, force: true });
       sandboxHome = '';
     }
+    for (const binDir of pathBinDirs) {
+      fs.rmSync(binDir, { recursive: true, force: true });
+    }
+    pathBinDirs = [];
   });
 
   it('getCodegraphDownloadUrl builds release URLs per platform', () => {
@@ -159,20 +169,30 @@ describe('codegraph-installer', () => {
     expect(isCodegraphInstalled()).toBe(true);
   });
 
-  it('isCodegraphOnPath mirrors which codegraph result', () => {
+  it('isCodegraphOnPath detects an executable codegraph entry on the live PATH', () => {
     expect(isCodegraphOnPath()).toBe(false);
-    (childProcess.execSync as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => '');
+    withCodegraphOnPath();
     expect(isCodegraphOnPath()).toBe(true);
   });
 
+  it('isCodegraphOnPath ignores non-executable entries', () => {
+    const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-path-bin-'));
+    pathBinDirs.push(binDir);
+    fs.writeFileSync(path.join(binDir, 'codegraph'), '#!/bin/sh\nexit 0\n');
+    const realPath = process.env.PATH;
+    process.env.PATH = `${binDir}:${realPath ?? ''}`;
+    expect(isCodegraphOnPath()).toBe(false);
+    process.env.PATH = realPath ?? '';
+  });
+
   it('getCodegraphCommand prefers a valid marker over PATH', () => {
-    (childProcess.execSync as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => '');
+    withCodegraphOnPath();
     const launcher = writeFakeInstall('1.5.0');
     expect(getCodegraphCommand()).toBe(launcher);
   });
 
   it('getCodegraphCommand falls back to bare name when on PATH', () => {
-    (childProcess.execSync as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => '');
+    withCodegraphOnPath();
     expect(getCodegraphCommand()).toBe('codegraph');
   });
 
@@ -199,7 +219,7 @@ describe('codegraph-installer', () => {
     expect(fs.existsSync(path.join(getCodegraphInstallRoot(), 'current.json'))).toBe(false);
   });
 
-  it('ensureCodegraphInstalled does not fetch for unsupported platforms', async () => {
+  it('ensureCodegraphInstalled aborts without fetching when no checksum exists for the platform archive', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const result = await ensureCodegraphInstalled({ version: '9.9.9-test', checksums: {} });
     expect(fetchSpy).not.toHaveBeenCalled();

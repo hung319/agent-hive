@@ -29,10 +29,6 @@ import * as childProcess from 'child_process';
 import { shouldSkipAutoInstall } from './skip-install.js';
 import { isNewerVersion, parseSha256SumFor, resolveLatestCodegraphVersion } from './codegraph-version.js';
 
-// Lazy namespace read so tests can spy on childProcess.execSync.
-const execSync = (...args: Parameters<typeof childProcess.execSync>) =>
-  (childProcess as unknown as { execSync: typeof childProcess.execSync }).execSync(...args);
-
 const CODEGRAPH_REPO = 'colbymchenry/codegraph';
 const RELEASE_DOWNLOAD_BASE = `https://github.com/${CODEGRAPH_REPO}/releases/download`;
 
@@ -125,10 +121,32 @@ export function isCodegraphInstalled(): boolean {
   return marker !== null && fs.existsSync(marker.bin);
 }
 
-/** Check if codegraph is available on PATH (e.g., globally installed). */
+/** Check if an executable `codegraph` exists in any live-PATH directory.
+ * Scans process.env directly instead of spawning `which`: Bun snapshots the
+ * environment at startup, so child processes never see runtime PATH changes,
+ * and this avoids a fork per availability check. */
 export function isCodegraphOnPath(): boolean {
+  const pathVar = process.env.PATH;
+  if (pathVar === undefined || pathVar === '') {
+    return false;
+  }
+  const names = process.platform === 'win32'
+    ? ['codegraph.exe', 'codegraph.cmd', 'codegraph.bat']
+    : ['codegraph'];
+  for (const dir of pathVar.split(path.delimiter)) {
+    if (dir === '') continue;
+    for (const name of names) {
+      if (isExecutable(path.join(dir, name))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isExecutable(candidate: string): boolean {
   try {
-    execSync('which codegraph 2>/dev/null', { stdio: 'pipe' });
+    fs.accessSync(candidate, fs.constants.X_OK);
     return true;
   } catch {
     return false;
@@ -246,9 +264,9 @@ async function downloadAndExtractBundle(params: {
     fs.writeFileSync(archivePath, buffer);
 
     if (archiveName.endsWith('.zip')) {
-      execSync(`tar -xf "${archivePath}" -C "${bundleDir}" --strip-components=1`, { stdio: 'pipe' });
+      childProcess.execSync(`tar -xf "${archivePath}" -C "${bundleDir}" --strip-components=1`, { stdio: 'pipe' });
     } else {
-      execSync(`tar xzf "${archivePath}" -C "${bundleDir}" --strip-components=1`, { stdio: 'pipe' });
+      childProcess.execSync(`tar xzf "${archivePath}" -C "${bundleDir}" --strip-components=1`, { stdio: 'pipe' });
     }
 
     const launcherRel = findLauncherRel(bundleDir);
