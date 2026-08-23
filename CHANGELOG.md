@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-08-23
+- Feat: Codegraph MCP không còn cần restart — đăng ký thẳng launcher `npm-shim.js` của dependency `@colbymchenry/codegraph` (tự resolve platform bundle, tự tải lúc spawn đầu tiên nếu thiếu); fallback: bundle marker cũ → executable trên PATH
+- Refactor: bỏ bộ downloader/TTL/checksum tự viết (~600 dòng net) — binary update đi kèm bản release plugin; boot plugin không còn gọi network cho codegraph
+
 ## [1.21.0] - 2026-08-23
 - Feat: Codegraph MCP auto-provisioning — installer tải self-contained bundle từ `colbymchenry/codegraph` releases (verify SHA256SUMS) vào `~/.config/opencode/hive/codegraph/<ver>` với marker `current.json`; auto-update mode resolve bản latest qua redirect `releases/latest` (không dùng GitHub API — rate limit), re-check tối đa 1 lần/ngày (TTL 24h), tự upgrade + sweep version dir cũ
 - Feat: MCP `codegraph` chỉ được đăng ký khi binary available (absolute launcher path) — hết lỗi đỏ ENOENT khi thiếu binary; boot chain fire-and-forget install → per-project `init`/`sync`
