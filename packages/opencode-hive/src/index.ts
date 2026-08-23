@@ -90,7 +90,7 @@ import { ensureToolsInstalled, getHiveBinPath } from './utils/tool-installer.js'
 import { ensureHivePathInShellConfig } from './utils/shell-path.js';
 import { ensureCodegraphInit } from './utils/codegraph-init.js';
 import type { CodegraphInitResult } from './utils/codegraph-init.js';
-import { ensureCodegraphInstalled } from './utils/codegraph-installer.js';
+import { resolveCodegraphMcpCommand } from './utils/codegraph-installer.js';
 // $ns Mode & Session Continuation hooks
 import { createNsModeState, detectNsMode, getNsDirective } from './hooks/ns-mode.js';
 import { createContinuationState, getPendingTaskCount, buildContinuationContext } from './hooks/session-continuation.js';
@@ -300,17 +300,17 @@ function getLspBootPromise(): Promise<import('./services/lsp-autoinstall.js').Ls
 }
 
 /**
- * Fire-and-forget boot chain (task-required contract): never await the
- * network install here — MCP registration is decided synchronously at config
- * time, so a freshly installed codegraph enables on the NEXT session.
+ * Fire-and-forget boot chain: resolve the codegraph command synchronously
+ * (npm shim / legacy bundle / PATH — no network) and auto-init/sync the
+ * project in the background. The npm shim self-heals on first MCP spawn, so
+ * the codegraph works from the very first session.
  */
 function getCodegraphBootPromise(directory: string): Promise<CodegraphInitResult> {
   if (!codegraphBootPromise) {
-    codegraphBootPromise = ensureCodegraphInstalled().then((command) =>
-      command
-        ? ensureCodegraphInit(directory, command)
-        : { success: true, action: 'skipped' as const, message: 'codegraph unavailable, skipping auto-init' },
-    );
+    const resolution = resolveCodegraphMcpCommand();
+    codegraphBootPromise = resolution !== null
+      ? ensureCodegraphInit(directory, resolution.command)
+      : Promise.resolve({ success: true, action: 'skipped' as const, message: 'codegraph unavailable, skipping auto-init' });
   }
   return codegraphBootPromise;
 }

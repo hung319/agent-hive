@@ -28,7 +28,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "generate-skills": "bun run scripts/generate-skills.ts",
-    "build": "npm run clean && npm run generate-skills && bun build src/index.ts --outdir dist --target node --format esm --packages=bundle --external @ast-grep/napi --external @sparkleideas/agent-booster --external @sparkleideas/memory --external simple-git && tsc --emitDeclarationOnly",
+    "build": "npm run clean && npm run generate-skills && bun build src/index.ts --outdir dist --target node --format esm --packages=bundle --external @ast-grep/napi --external @sparkleideas/agent-booster --external @sparkleideas/memory --external simple-git --external @colbymchenry/codegraph && tsc --emitDeclarationOnly",
     "dev": "opencode plugin dev",
     "test": "bun test"
   },
@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@ast-grep/napi": "^0.44.0",
+    "@colbymchenry/codegraph": "1.5.0",
     "simple-git": "^3.36.0"
   },
   "peerDependenciesMeta": {

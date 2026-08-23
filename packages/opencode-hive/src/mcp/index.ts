@@ -3,7 +3,10 @@ import { websearchMcp } from './websearch';
 import { context7Mcp } from './context7';
 import { grepAppMcp } from './grep-app';
 import { createCodegraphMcp } from './codegraph';
-import { isCodegraphAvailable, getCodegraphCommand } from '../utils/codegraph-installer.js';
+import {
+  resolveCodegraphMcpCommand,
+  type CodegraphMcpResolution,
+} from '../utils/codegraph-installer.js';
 
 /**
  * Built-in MCP configurations
@@ -14,11 +17,10 @@ import { isCodegraphAvailable, getCodegraphCommand } from '../utils/codegraph-in
  * - grep_app: Remote (GitHub code search)
  *
  * Local MCPs:
- * - codegraph: Pre-indexed code knowledge graph. Registered ONLY when the
- *   binary is available (Hive manages an auto-updated bundle there — checked
- *   at most daily — installed to ~/.config/opencode/hive/codegraph on boot;
- *   until then it is omitted so OpenCode never spawns a missing binary). The
- *   install runs in the background, so the MCP appears on the next session.
+ * - codegraph: Pre-indexed code knowledge graph backed by the npm dependency's
+ *   self-healing shim (resolves its platform bundle, downloads on first spawn
+ *   when missing), with a legacy managed-bundle marker and a PATH executable
+ *   as fallbacks. Registered whenever any source resolves — no restart needed.
  *
  * Note: ast_grep and gitingest are registered as native tools (not MCP)
  */
@@ -38,8 +40,8 @@ function getRemoteMcps(): Record<string, McpConfig> {
 }
 
 export interface BuiltinMcpOptions {
-  /** Readiness probe for the local codegraph MCP (defaults to installer check). */
-  isCodegraphReady?: () => boolean;
+  /** Command resolver for the local codegraph MCP (defaults to installer check). */
+  resolveCodegraph?: () => CodegraphMcpResolution | null;
 }
 
 export const getBuiltinMcps = (
@@ -55,12 +57,9 @@ export const getBuiltinMcps = (
   }
 
   if (!disabled.has('codegraph')) {
-    const isReady = opts.isCodegraphReady ?? isCodegraphAvailable;
-    if (isReady()) {
-      const codegraphCommand = getCodegraphCommand();
-      if (codegraphCommand !== '') {
-        result.codegraph = createCodegraphMcp(codegraphCommand);
-      }
+    const resolution = (opts.resolveCodegraph ?? resolveCodegraphMcpCommand)();
+    if (resolution !== null) {
+      result.codegraph = createCodegraphMcp(resolution.command);
     }
   }
 

@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { getCodegraphCommand } from './codegraph-installer.js';
+import { resolveCodegraphMcpCommand } from './codegraph-installer.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -20,6 +20,15 @@ export type CodegraphExecFn = (
   options: { cwd: string; timeout: number },
 ) => Promise<{ stdout: string; stderr: string }>;
 
+export type CodegraphCommandArg = string | string[];
+
+function normalizeCommand(codegraphCommand?: CodegraphCommandArg): string[] {
+  if (typeof codegraphCommand === 'string') {
+    return codegraphCommand === '' ? [] : [codegraphCommand];
+  }
+  return codegraphCommand ?? [];
+}
+
 /**
  * Check if project has .codegraph directory
  */
@@ -30,49 +39,53 @@ function hasCodegraphIndex(projectRoot: string): boolean {
 /**
  * Auto-initialize codegraph for a project.
  *
- * Flow (simplified from oh-my-openagent):
- * 1. Resolve the codegraph command (provided, or via the auto-installer:
- *    installed bundle marker or PATH lookup)
+ * Flow:
+ * 1. Resolve the codegraph argv (provided, or via resolveCodegraphMcpCommand)
  * 2. Check if .codegraph/ exists
  * 3. If not → run `<command> init`
  * 4. If yes → run `<command> sync`
  *
  * @param projectRoot - Project root directory
- * @param codegraphCommand - Explicit command (defaults to installer resolution)
+ * @param codegraphCommand - Command (defaults to resolver: npm shim, bundle marker, or PATH)
  * @param execFn - Runner for init/sync execution (defaults to execFile)
  * @returns Action taken
  */
 export async function ensureCodegraphInit(
   projectRoot: string,
-  codegraphCommand?: string,
+  codegraphCommand?: CodegraphCommandArg,
   execFn: CodegraphExecFn = (file, args, options) => execFileAsync(file, args, options),
 ): Promise<CodegraphInitResult> {
-  const command = codegraphCommand || getCodegraphCommand();
-  if (command === '') {
+  const argv = normalizeCommand(codegraphCommand);
+  // Explicit empty command = caller opts out; only an omitted argument falls
+  // back to auto-resolution.
+  if (codegraphCommand === undefined) {
+    const resolution = resolveCodegraphMcpCommand();
+    if (resolution !== null) {
+      argv.push(...resolution.command);
+    }
+  }
+
+  const file = argv[0];
+  if (file === undefined || file === '') {
     return {
       success: true,
       action: 'skipped',
-      message: 'codegraph install pending, skipping auto-init',
+      message: 'codegraph unavailable, skipping auto-init',
     };
   }
 
   try {
     const hasIndex = hasCodegraphIndex(projectRoot);
+    const sub = hasIndex ? 'sync' : 'init';
 
-    if (!hasIndex) {
-      await execFn(command, ['init'], { cwd: projectRoot, timeout: 60_000 });
-      return {
-        success: true,
-        action: 'init',
-        message: 'codegraph init completed',
-      };
-    }
-
-    await execFn(command, ['sync'], { cwd: projectRoot, timeout: 30_000 });
+    await execFn(file, [...argv.slice(1), sub], {
+      cwd: projectRoot,
+      timeout: hasIndex ? 30_000 : 60_000,
+    });
     return {
       success: true,
-      action: 'sync',
-      message: 'codegraph sync completed',
+      action: sub,
+      message: `codegraph ${sub} completed`,
     };
   } catch (error) {
     return {
