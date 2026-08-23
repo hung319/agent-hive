@@ -263,11 +263,13 @@ async function downloadAndExtractBundle(params: {
     const archivePath = path.join(tmpDir, archiveName);
     fs.writeFileSync(archivePath, buffer);
 
-    if (archiveName.endsWith('.zip')) {
-      childProcess.execSync(`tar -xf "${archivePath}" -C "${bundleDir}" --strip-components=1`, { stdio: 'pipe' });
-    } else {
-      childProcess.execSync(`tar xzf "${archivePath}" -C "${bundleDir}" --strip-components=1`, { stdio: 'pipe' });
-    }
+    // argv-array exec, deliberately NOT a shell string: Bun's shell-spawned
+    // execSync failed with "command not found" on CI runners even though the
+    // same tar binary spawns fine via execFileSync.
+    const extractArgs = archiveName.endsWith('.zip')
+      ? ['-xf', archivePath, '-C', bundleDir, '--strip-components=1']
+      : ['-xzf', archivePath, '-C', bundleDir, '--strip-components=1'];
+    childProcess.execFileSync('tar', extractArgs, { stdio: 'pipe' });
 
     const launcherRel = findLauncherRel(bundleDir);
     if (launcherRel === null) {
