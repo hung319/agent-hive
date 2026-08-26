@@ -118,8 +118,41 @@ function resolveNpmShimDefault(): string | null {
 }
 
 /**
+ * Check if process.execPath is a real Node.js binary (not Bun/opencode).
+ * When opencode runs plugins, process.execPath points to the opencode binary,
+ * which cannot execute npm-shim.js (a Node.js script).
+ */
+function isNodeBinary(): boolean {
+  try {
+    const execBase = path.basename(process.execPath);
+    return execBase === 'node' || execBase === 'nodejs';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Find a usable Node.js binary in PATH for running npm-shim.js.
+ */
+function findNodeBinary(): string | null {
+  const pathVar = process.env.PATH;
+  if (!pathVar) return null;
+  const names = process.platform === 'win32'
+    ? ['node.exe', 'node.cmd', 'node.bat']
+    : ['node', 'nodejs'];
+  for (const dir of pathVar.split(path.delimiter)) {
+    if (dir === '') continue;
+    for (const name of names) {
+      const candidate = path.join(dir, name);
+      if (isExecutable(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+/**
  * Resolve the command that should back the codegraph MCP server.
- * npm shim → legacy managed bundle → PATH executable → null.
+ * npm shim (with real Node) → legacy managed bundle → PATH executable → null.
  */
 export function resolveCodegraphMcpCommand(
   options: ResolveCodegraphOptions = {},
@@ -127,7 +160,13 @@ export function resolveCodegraphMcpCommand(
   const resolveNpmShim = options.resolveNpmShim ?? resolveNpmShimDefault;
   const shimPath = resolveNpmShim();
   if (shimPath !== null) {
-    return { command: [process.execPath, shimPath], source: 'npm' };
+    // process.execPath may be the opencode/bun binary, not node.
+    // npm-shim.js is a Node.js script and needs a real node to run.
+    let nodeBin = isNodeBinary() ? process.execPath : findNodeBinary();
+    if (nodeBin !== null) {
+      return { command: [nodeBin, shimPath], source: 'npm' };
+    }
+    // No node found — fall through to bundle/PATH fallbacks
   }
   const marker = readMarker();
   if (marker !== null && fs.existsSync(marker.bin)) {
