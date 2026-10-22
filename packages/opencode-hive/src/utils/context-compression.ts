@@ -345,7 +345,7 @@ If you need context from earlier in the conversation, you can:
 
 /**
  * Create a session compaction hook for Hive
- * This can be used with experimental.session.compacting hook
+ * This can be used with the session `compaction` hook
  */
 export function createCompactionHook(config: CompressionConfig = DEFAULT_CONFIG) {
   const cfg = { ...DEFAULT_CONFIG, ...config };

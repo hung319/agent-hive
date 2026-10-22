@@ -7,7 +7,7 @@
  * Pattern inspired by oh-my-openagent's omo-lsp PostToolUse hook,
  * adapted for agent-hive's plugin architecture.
  *
- * The diagnostics run on `experimental.chat.system.transform` (before the next
+ * The diagnostics run on the session `context` system-injection hook (before the next
  * LLM call), not synchronously after every edit — this keeps the experience
  * snappy while still catching type errors proactively.
  */
@@ -276,7 +276,7 @@ function formatPythonDiagnosticsBlock(lines: string[]): string {
 // Cleanup
 // ---------------------------------------------------------------------------
 
-/** Reset state — call from `experimental.session.compacting`. */
+/** Reset state — call from the session `compaction` hook. */
 export function resetDiagnostics(state: LspDiagnosticsState): void {
   state.modifiedFiles.clear();
 }

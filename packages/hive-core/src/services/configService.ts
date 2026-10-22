@@ -340,7 +340,7 @@ export class ConfigService {
    * Returns the configured cadence or 1 (every turn) if not set.
    * Validates cadence values and defaults to 1 for invalid values.
    * 
-   * @param hookName - The OpenCode hook name (e.g., 'experimental.chat.system.transform')
+   * @param hookName - The OpenCode hook name (e.g., 'context' // V2 session hook (was V1 hook map key))
    * @param options - Optional configuration
    * @param options.safetyCritical - If true, enforces cadence=1 regardless of config
    * @returns Validated cadence value (always >= 1)
