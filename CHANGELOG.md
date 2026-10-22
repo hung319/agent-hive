@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-22
+- Breaking: port toàn bộ plugin sang **OpenCode V2 plugin API** — bỏ hỗ trợ OpenCode V1: `Plugin.define({ id, setup(ctx) → cleanup })`
+  - Hooks mapping: `experimental.chat.system.transform` → session `context` hook (system injection + per-agent hive-tool gate); `experimental.session.compacting` → session `compaction` hook; per-agent tools deny map → context-hook gating; tool executes → compat layer `(args, v2Context)` với kết quả `{content}`
+  - Agent bootstrap: sinh `.opencode/agents/*.md` (permissions YAML flow-map, model ref `provider/model#variant`, frontmatter `temperature`); built-in agents giữ nguyên (demoting `build` làm vỡ `opencode run`); default primary qua `agentEditor.default("zetta")`
+  - Client: `session.generate`, `OpenCodeProviderService(defaultSessionID)`, `session.synthetic` cho HiddenJudge/compaction restoration
+  - Loader fix: V2 resolve entry `index.js` tầng gốc của thư mục plugin — ship root `index.js` shim + `package.json` `exports`
+- Feat: V2 docs-sync — `temperature` render vào agent md frontmatter (field hợp lệ theo schema/docs V2), giữ đúng ví dụ custom-agents trong README
+- Tests: harness V2 dùng chung (`runV2PluginSetup`/`execTool`/`agentPromptProxy`); port 5 e2e suites + tests services; **624 pass / 0 fail / 1 skip**, `tsc` sạch, build dist 1.12 MB
+- Verify: smoke runtime thật với opencode v2.1.2 — plugin nạp, zetta là default agent, exit=0
+
+## [1.21.2] - 2026-08-23
+- Fix: CodeGraph MCP báo `MCP error -32000: Connection closed` khi chạy trong OpenCode — `process.execPath` trả về binary OpenCode (Bun) thay vì Node; thêm `isNodeBinary()` + fallback `findNodeBinary()` (npm-shim với node thật → managed bundle → PATH)
+
 ## [1.21.1] - 2026-08-23
 - Feat: Codegraph MCP không còn cần restart — đăng ký thẳng launcher `npm-shim.js` của dependency `@colbymchenry/codegraph` (tự resolve platform bundle, tự tải lúc spawn đầu tiên nếu thiếu); fallback: bundle marker cũ → executable trên PATH
 - Refactor: bỏ bộ downloader/TTL/checksum tự viết (~600 dòng net) — binary update đi kèm bản release plugin; boot plugin không còn gọi network cho codegraph
