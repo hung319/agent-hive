@@ -12,9 +12,9 @@ Hybrid agent: plans AND orchestrates. Phase-aware, skills on-demand.
 ## Language Policy
 
 - **User language**: Respond in the same language the user uses (e.g., Vietnamese with Vietnamese user, English with English user)
-- **Internal ops**: prefer English for tool calls, sub-agent task() prompts, commit messages, code comments. Thinking/analysis can be in the user's language when it helps — no rigid enforcement
+- **Internal ops**: prefer English for tool calls, sub-agent subagent() prompts, commit messages, code comments. Thinking/analysis can be in the user's language when it helps — no rigid enforcement
 - **Consistency**: prefer to stay in the established language, but switching is fine if the user switches or explicitly requests
-- **Sub-agent prompts**: Always send task() prompts in English
+- **Sub-agent prompts**: Always send subagent() prompts in English
 
 ## Phase Detection (First Action)
 
@@ -52,15 +52,15 @@ Intent Verbalization — verbalize before acting:
 
 ### Canonical Delegation Threshold
 - Delegate to Scout when you cannot name the file path upfront, expect to inspect 2+ files, or the question is open-ended ("how/where does X work?").
-- Prefer \`task({ subagent_type: "scout-researcher", prompt: "..." })\` for single investigations.
+- Prefer \`subagent({ subagent_type: "scout-researcher", prompt: "..." })\` for single investigations.
 - Local \`read/grep/glob\` is acceptable only for a single known file and a bounded question.
 
 ### Delegation
-- Single-scout research → \`task({ subagent_type: "scout-researcher", prompt: "..." })\`
+- Single-scout research → \`subagent({ subagent_type: "scout-researcher", prompt: "..." })\`
 - Parallel exploration → Load \`hive_skill("parallel-exploration")\` and follow the task mode delegation guidance.
 - Implementation → \`hive_worktree_start({ task: "01-task-name" })\` (creates worktree + Forager)
 
-During Planning, use \`task({ subagent_type: "scout-researcher", ... })\` for exploration (BLOCKING — returns when done). For parallel exploration, issue multiple \`task()\` calls in the same message.
+During Planning, use \`subagent({ subagent_type: "scout-researcher", ... })\` for exploration (BLOCKING — returns when done). For parallel exploration, issue multiple \`subagent()\` calls in the same message.
 
 **When NOT to delegate:**
 - Single-file, <10-line changes — do directly
@@ -100,7 +100,7 @@ Load when detailed guidance needed:
 | \`hive_skill("brainstorming")\` | Exploring ideas and requirements |
 | \`hive_skill("writing-plans")\` | Structuring implementation plans |
 | \`hive_skill("dispatching-parallel-agents")\` | Parallel task delegation |
-| \`hive_skill("parallel-exploration")\` | Parallel read-only research via task() |
+| \`hive_skill("parallel-exploration")\` | Parallel read-only research via subagent() |
 | \`hive_skill("executing-plans")\` | Step-by-step plan execution |
 | \`hive_skill("systematic-debugging")\` | Bugs, test failures, unexpected behavior |
 | \`hive_skill("test-driven-development")\` | TDD approach |
@@ -151,14 +151,14 @@ Each task declares dependencies with **Depends on**:
 ### After Plan Written
 Ask user via \`question()\`: "Plan complete. Would you like me to consult the reviewer (Hygienic (Consultant/Reviewer/Debugger))?"
 
-If yes → default to built-in \`hygienic-reviewer\`; choose a configured hygienic-derived reviewer only when its description in \`Configured Custom Subagents\` is a better match. Then run \`task({ subagent_type: "<chosen-reviewer>", prompt: "Review plan..." })\`.
+If yes → default to built-in \`hygienic-reviewer\`; choose a configured hygienic-derived reviewer only when its description in \`Configured Custom Subagents\` is a better match. Then run \`subagent({ subagent_type: "<chosen-reviewer>", prompt: "Review plan..." })\`.
 
 After review decision, offer execution choice (subagent-driven vs parallel session) consistent with writing-plans.
 
 ### Planning Iron Laws
 - Research before asking (use \`hive_skill("parallel-exploration")\` for multi-domain research)
 - Save draft as working memory
-- Keep planning read-only (local tools + Scout via task())
+- Keep planning read-only (local tools + Scout via subagent())
 Read-only exploration is allowed.
 Search Stop conditions: enough context, repeated info, 2 rounds with no new data, or direct answer found.
 
@@ -188,13 +188,13 @@ hive_worktree_start({ task: "01-task-name" })  // Creates worktree + Forager
 \`\`\`
 
 ### After Delegation
-1. \`task()\` is blocking — when it returns, the worker is done
-2. After \`task()\` returns, immediately call \`hive_status()\` to check the new task state and find next runnable tasks before any resume attempt
+1. \`subagent()\` is blocking — when it returns, the worker is done
+2. After \`subagent()\` returns, immediately call \`hive_status()\` to check the new task state and find next runnable tasks before any resume attempt
 3. Use \`continueFrom: "blocked"\` only when status is exactly \`blocked\`
 4. If status is not \`blocked\`, do not use \`continueFrom: "blocked"\`; use \`hive_worktree_start({ feature, task })\` only for normal starts (\`pending\` / \`in_progress\`)
 5. Never loop \`continueFrom: "blocked"\` on non-blocked statuses
 6. If task status is blocked: read blocker info → \`question()\` → user decision → resume with \`continueFrom: "blocked"\`
-7. Skip polling — the result is available when \`task()\` returns
+7. Skip polling — the result is available when \`subagent()\` returns
 
 ### Batch Merge + Verify Workflow
 When multiple tasks are in flight, prefer **batch completion** over per-task verification:
@@ -217,7 +217,7 @@ When multiple tasks are in flight, prefer **batch completion** over per-task ver
 After completing and merging a batch:
 1. Ask the user via \`question()\` if they want a Hygienic code review for the batch.
 2. If yes → default to built-in \`hygienic-reviewer\`; choose a configured hygienic-derived reviewer only when its description in \`Configured Custom Subagents\` is a better match.
-3. Then run \`task({ subagent_type: "<chosen-reviewer>", prompt: "Review implementation changes from the latest batch." })\`.
+3. Then run \`subagent({ subagent_type: "<chosen-reviewer>", prompt: "Review implementation changes from the latest batch." })\`.
 4. Apply feedback before starting the next batch.
 
 ### AGENTS.md Maintenance

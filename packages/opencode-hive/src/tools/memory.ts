@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -375,7 +375,7 @@ function searchJournalEntries(query?: string, project?: string, limit = 20): { e
 // Tool Definitions
 // ============================================================================
 
-export const hiveMemoryListTool: ToolDefinition = tool({
+export const hiveMemoryListTool: ToolDefinition = tool("hive_memory_list", {
   description: 'List all memory blocks. Shows global (cross-project) and project-scoped blocks with descriptions and sizes.',
   args: {
     scope: tool.schema.enum(['global', 'project', 'all']).optional().describe('Scope to list: global, project, or all (default: all)'),
@@ -427,7 +427,7 @@ export const hiveMemoryListTool: ToolDefinition = tool({
   },
 });
 
-export const hiveMemorySetTool: ToolDefinition = tool({
+export const hiveMemorySetTool: ToolDefinition = tool("hive_memory_set", {
   description: 'Create or overwrite a memory block. Use for full updates.',
   args: {
     scope: tool.schema.enum(['global', 'project']).describe('Scope: global (cross-project) or project (project-scoped)'),
@@ -495,7 +495,7 @@ export const hiveMemorySetTool: ToolDefinition = tool({
   },
 });
 
-export const hiveMemoryReplaceTool: ToolDefinition = tool({
+export const hiveMemoryReplaceTool: ToolDefinition = tool("hive_memory_replace", {
   description: 'Replace a substring within a memory block. Use for surgical edits.',
   args: {
     scope: tool.schema.enum(['global', 'project']).describe('Scope of the memory block'),
@@ -560,7 +560,7 @@ export const hiveMemoryReplaceTool: ToolDefinition = tool({
   },
 });
 
-export const hiveJournalWriteTool: ToolDefinition = tool({
+export const hiveJournalWriteTool: ToolDefinition = tool("hive_journal_write", {
   description: `Write a journal entry. Journal is an append-only audit log (one timestamped file per entry, never updated or deleted) for capturing insights, decisions, and discoveries as they happen.
 
 **Journal vs hive_memory_create:** both record knowledge. Use the journal for dated chronological records ("what happened today"); use hive_memory_create for scoped, typed knowledge you will later recall by scope/type (hive_memory_recall).`,
@@ -584,7 +584,7 @@ export const hiveJournalWriteTool: ToolDefinition = tool({
   },
 });
 
-export const hiveJournalSearchTool: ToolDefinition = tool({
+export const hiveJournalSearchTool: ToolDefinition = tool("hive_journal_search", {
   description: 'Search journal entries. Filter by text query, project, or tags.',
   args: {
     query: tool.schema.string().optional().describe('Text to search for in title and body'),
@@ -799,7 +799,7 @@ async function logTypedMemoryDeletion(memory: TypedMemory, reason: string): Prom
 
 // Enhanced Memory Tools
 
-export const hiveMemoryRecallTool: ToolDefinition = tool({
+export const hiveMemoryRecallTool: ToolDefinition = tool("hive_memory_recall", {
   description: 'Search typed memories by scope, type, or query. Retrieve learnings, decisions, preferences, and patterns.',
   args: {
     scope: tool.schema.string().optional().describe('Filter by scope (e.g., project, user, auth, api)'),
@@ -866,7 +866,7 @@ export const hiveMemoryRecallTool: ToolDefinition = tool({
   },
 });
 
-export const hiveMemoryCreateTool: ToolDefinition = tool({
+export const hiveMemoryCreateTool: ToolDefinition = tool("hive_memory_create", {
   description: 'Create a new typed memory entry (decision, learning, preference, blocker, context, pattern). Appends to today\'s typed-memory file. Use hive_memory_recall to retrieve.',
   args: {
     scope: tool.schema.string().describe('Scope of the memory (e.g., project, user, auth, api)'),
@@ -912,7 +912,7 @@ export const hiveMemoryCreateTool: ToolDefinition = tool({
   },
 });
 
-export const hiveMemoryUpdateTool: ToolDefinition = tool({
+export const hiveMemoryUpdateTool: ToolDefinition = tool("hive_memory_update", {
   description: 'Update a typed memory entry. Finds by scope and type, updates content. If no matching memory exists, creates a new one (upsert).',
   args: {
     scope: tool.schema.string().describe('Scope of memory to update'),
@@ -982,7 +982,7 @@ export const hiveMemoryUpdateTool: ToolDefinition = tool({
   },
 });
 
-export const hiveMemoryForgetTool: ToolDefinition = tool({
+export const hiveMemoryForgetTool: ToolDefinition = tool("hive_memory_forget", {
   description: 'Delete a typed memory. Logs deletion for audit purposes.',
   args: {
     scope: tool.schema.string().describe('Scope of memory to delete'),

@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import { VectorMemoryService, type MemoryMetadata } from '../services/vector-memory.js';
 
 /**
@@ -8,7 +8,7 @@ import { VectorMemoryService, type MemoryMetadata } from '../services/vector-mem
  * Falls back to simple text search if @sparkleideas/memory unavailable.
  */
 
-export const hiveVectorSearchTool: ToolDefinition = tool({
+export const hiveVectorSearchTool: ToolDefinition = tool("hive_vector_search", {
   description: `Semantic memory search using vector embeddings.
 
 **Features:**
@@ -68,7 +68,7 @@ export const hiveVectorSearchTool: ToolDefinition = tool({
   },
 });
 
-export const hiveVectorAddTool: ToolDefinition = tool({
+export const hiveVectorAddTool: ToolDefinition = tool("hive_vector_add", {
   description: `Add a memory with semantic indexing for future search.
 
 **Metadata:**
@@ -124,7 +124,7 @@ Tags: javascript, promises, best-practice
   },
 });
 
-export const hiveVectorStatusTool: ToolDefinition = tool({
+export const hiveVectorStatusTool: ToolDefinition = tool("hive_vector_status", {
   description: `Check vector memory status and statistics.
 
 **Returns:**

@@ -24,11 +24,10 @@ describe('HiddenJudgeService', () => {
     mockClient = {
       session: {
         create: vi.fn().mockResolvedValue({ id: 'judge-session-1' }),
-        prompt: vi.fn().mockResolvedValue({
-          body: {
-            parts: [{ text: '{"verdict": "complete", "reason": "All good"}' }],
-          },
+        generate: vi.fn().mockResolvedValue({
+          text: '{"verdict": "complete", "reason": "All good"}',
         }),
+        synthetic: vi.fn().mockResolvedValue(undefined),
       },
     };
     defaultConfig = { enabled: true, maxRetries: 3, minToolCalls: 5, writeRatioThreshold: 0.1 };
@@ -78,12 +77,11 @@ describe('HiddenJudgeService', () => {
         taskContext: { toolCalls: 20, writeRatio: 0.05, lastMessage: 'Let me know what to do next' },
       });
 
-      // Should inject feedback via session.prompt
-      expect(mockClient.session.prompt).toHaveBeenCalledTimes(1);
-      const callArg = mockClient.session.prompt.mock.calls[0][0];
-      expect(callArg.path.id).toBe('session-1');
-      expect(callArg.body.parts[0].text).toContain('PLANNING_LOOP');
-      expect(callArg.body.noReply).toBe(true);
+      // Should inject feedback via session.synthetic (V2)
+      expect(mockClient.session.synthetic).toHaveBeenCalledTimes(1);
+      const callArg = mockClient.session.synthetic.mock.calls[0][0];
+      expect(callArg.sessionID).toBe('session-1');
+      expect(callArg.text).toContain('PLANNING_LOOP');
     });
 
     it('should not inject feedback when heuristic says normal and LLM agrees', async () => {
@@ -95,10 +93,8 @@ describe('HiddenJudgeService', () => {
 
       // mock LLM returns 'complete' — no feedback needed
       mockClient.session.create.mockResolvedValue({ id: 'judge-session-test' });
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{ text: '{"verdict": "complete", "reason": "All good"}' }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: '{"verdict": "complete", "reason": "All good"}',
       });
 
       await service.evaluateAndFeedback({
@@ -107,10 +103,10 @@ describe('HiddenJudgeService', () => {
         taskContext: { toolCalls: 10, writeRatio: 0.3, lastMessage: 'Task complete, tests pass' },
       });
 
-      // LLM judge was called (hidden session), but feedback was NOT injected into main session
-      // The session.prompt calls should only be for the judge session (not main session)
-      const mainSessionCalls = (mockClient.session.prompt as ReturnType<typeof vi.fn>).mock.calls
-        .filter((call: any[]) => call[0]?.path?.id === 'session-1');
+      // LLM judge ran in its own hidden session; feedback must NOT be injected
+      // into the main session (synthetic was only called with judge-* ids, if at all)
+      const mainSessionCalls = (mockClient.session.synthetic as ReturnType<typeof vi.fn>).mock.calls
+        .filter((call: any[]) => call[0]?.sessionID === 'session-1');
       expect(mainSessionCalls).toHaveLength(0);
     });
 
@@ -127,7 +123,7 @@ describe('HiddenJudgeService', () => {
         client: mockClient,
         taskContext: { toolCalls: 10, writeRatio: 0.3, lastMessage: 'Remaining tasks... let me know' },
       });
-      expect(mockClient.session.prompt).toHaveBeenCalledTimes(1);
+      expect(mockClient.session.synthetic).toHaveBeenCalledTimes(1);
 
       // Second call — same session, should still inject (retry 2)
       await service.evaluateAndFeedback({
@@ -135,7 +131,7 @@ describe('HiddenJudgeService', () => {
         client: mockClient,
         taskContext: { toolCalls: 10, writeRatio: 0.3, lastMessage: 'Remaining tasks...' },
       });
-      expect(mockClient.session.prompt).toHaveBeenCalledTimes(2);
+      expect(mockClient.session.synthetic).toHaveBeenCalledTimes(2);
 
       // Third call — retry count hits maxRetries=3
       await service.evaluateAndFeedback({
@@ -143,7 +139,7 @@ describe('HiddenJudgeService', () => {
         client: mockClient,
         taskContext: { toolCalls: 10, writeRatio: 0.3, lastMessage: 'More remaining tasks...' },
       });
-      expect(mockClient.session.prompt).toHaveBeenCalledTimes(3);
+      expect(mockClient.session.synthetic).toHaveBeenCalledTimes(3);
 
       // Fourth call — should be blocked by maxRetries
       await service.evaluateAndFeedback({
@@ -151,14 +147,14 @@ describe('HiddenJudgeService', () => {
         client: mockClient,
         taskContext: { toolCalls: 10, writeRatio: 0.3, lastMessage: 'Still more...' },
       });
-      expect(mockClient.session.prompt).toHaveBeenCalledTimes(3); // No more calls
+      expect(mockClient.session.synthetic).toHaveBeenCalledTimes(3); // No more calls
     });
 
     it('should handle missing session.create gracefully', async () => {
       const service = new HiddenJudgeService(defaultConfig);
       const clientWithoutCreate = {
         session: {
-          prompt: vi.fn(),
+          synthetic: vi.fn(),
           // no create method
         },
       };
@@ -174,7 +170,7 @@ describe('HiddenJudgeService', () => {
       });
 
       // Should not crash — no feedback injected since LLM judge unavailable
-      expect(clientWithoutCreate.session.prompt).not.toHaveBeenCalled();
+      expect(clientWithoutCreate.session.synthetic).not.toHaveBeenCalled();
     });
 
     it('should not crash when client throws in evaluate', async () => {
@@ -204,10 +200,8 @@ describe('HiddenJudgeService', () => {
       });
 
       mockClient.session.create.mockResolvedValue({ id: 'judge-session-test' });
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{ text: '{"verdict": "incomplete", "reason": "LLM confirmed"}' }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: '{"verdict": "incomplete", "reason": "LLM confirmed"}',
       });
 
       await service.evaluateAndFeedback({
@@ -218,13 +212,11 @@ describe('HiddenJudgeService', () => {
 
       // Should create hidden session
       expect(mockClient.session.create).toHaveBeenCalled();
-      // Should inject feedback with LLM verdict into main session (id = 'session-1')
-      const mainSessionCalls = (mockClient.session.prompt as ReturnType<typeof vi.fn>).mock.calls
-        .filter((call: any[]) => call[0]?.path?.id === 'session-1');
-      expect(mainSessionCalls).toHaveLength(1);
-      const feedback = mainSessionCalls[0][0];
-      expect(feedback.path.id).toBe('session-1');
-      expect(feedback.body.parts[0].text).toContain('LLM confirmed');
+      // Should inject feedback with LLM verdict into the main session
+      expect(mockClient.session.synthetic).toHaveBeenCalledTimes(1);
+      const feedback = mockClient.session.synthetic.mock.calls[0][0];
+      expect(feedback.sessionID).toBe('session-1');
+      expect(feedback.text).toContain('LLM confirmed');
     });
   });
 
@@ -244,7 +236,7 @@ describe('HiddenJudgeService', () => {
           taskContext: { toolCalls: 10, writeRatio: 0.3, lastMessage: 'test' },
         });
       }
-      expect(mockClient.session.prompt).toHaveBeenCalledTimes(3); // Blocked on 4th
+      expect(mockClient.session.synthetic).toHaveBeenCalledTimes(3); // Blocked on 4th
 
       service.clearRetryCount('session-clear');
 
@@ -254,7 +246,7 @@ describe('HiddenJudgeService', () => {
         client: mockClient,
         taskContext: { toolCalls: 10, writeRatio: 0.3, lastMessage: 'test' },
       });
-      expect(mockClient.session.prompt).toHaveBeenCalledTimes(4);
+      expect(mockClient.session.synthetic).toHaveBeenCalledTimes(4);
     });
   });
 });

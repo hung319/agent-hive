@@ -56,7 +56,7 @@ Run \`explore_directory\` to quickly find which config files exist, then:
 
 ## Parallel Subagent Strategy
 
-Launch all subagents in parallel using \`task()\` for maximum speed:
+Launch all subagents in parallel using \`subagent()\` for maximum speed:
 
 ### Phase 1: Discovery (all in ONE message)
 - Spawn **codebase-locator** to find entry points, source files, test files, config files, and directory structure
@@ -70,7 +70,7 @@ Launch all subagents in parallel using \`task()\` for maximum speed:
 - Read core source files (entry points, main modules, routers)
 - Read config files to understand project setup
 
-Use \`task({ subagent_type: "codebase-locator", ... })\` and \`task({ subagent_type: "codebase-analyzer", ... })\` and \`task({ subagent_type: "pattern-finder", ... })\` — all in the same message.
+Use \`subagent({ subagent_type: "codebase-locator", ... })\` and \`subagent({ subagent_type: "codebase-analyzer", ... })\` and \`subagent({ subagent_type: "pattern-finder", ... })\` — all in the same message.
 
 ### Phase 3: Synthesis
 - Combine results from all subagents

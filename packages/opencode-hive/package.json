@@ -28,17 +28,18 @@
   "scripts": {
     "clean": "rm -rf dist",
     "generate-skills": "bun run scripts/generate-skills.ts",
-    "build": "npm run clean && npm run generate-skills && bun build src/index.ts --outdir dist --target node --format esm --packages=bundle --external @ast-grep/napi --external @sparkleideas/agent-booster --external @sparkleideas/memory --external simple-git --external @colbymchenry/codegraph && tsc --emitDeclarationOnly",
-    "dev": "opencode plugin dev",
+    "build": "npm run clean && npm run generate-skills && bun build src/index.ts --outdir dist --target node --format esm --packages=bundle --external @opencode/plugin --external @ast-grep/napi --external @sparkleideas/agent-booster --external @sparkleideas/memory --external simple-git --external @colbymchenry/codegraph && tsc --emitDeclarationOnly",
+    "dev": "bun run generate-skills && bun build src/index.ts --outdir dist --target node --format esm --watch",
     "test": "bun test"
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=0.13.7"
+    "@opencode/plugin": "^2.1.0"
   },
   "dependencies": {
     "@ast-grep/napi": "^0.44.0",
     "@colbymchenry/codegraph": "1.5.0",
-    "simple-git": "^3.36.0"
+    "simple-git": "^3.36.0",
+    "zod": "^4.1.8"
   },
   "peerDependenciesMeta": {
     "@sparkleideas/agent-booster": {
@@ -65,16 +66,19 @@
   },
   "devDependencies": {
     "hive-core": "workspace:*",
-    "@opencode-ai/plugin": "^1.14.48",
-    "@opencode-ai/sdk": "^1.14.48",
     "@types/bun": "^1.3.13",
     "@types/node": "^20.19.41",
     "typescript": "^5.9.3",
-    "@sparkleideas/agent-booster": "^0.2.34"
+    "@sparkleideas/agent-booster": "^0.2.34",
+    "@opencode/plugin": "^2.1.2",
+    "@opencode/client": "^2.1.2"
   },
   "files": [
     "dist/",
     "skills/",
     "README.md"
-  ]
+  ],
+  "exports": {
+    ".": "./index.js"
+  }
 }

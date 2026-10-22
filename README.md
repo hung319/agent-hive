@@ -31,11 +31,13 @@ Add `@hung319/opencode-hive` to your `opencode.json`:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@hung319/opencode-hive"]
+  "plugins": ["@hung319/opencode-hive"]
 }
 ```
 
 OpenCode handles the rest — no manual install needed. On first load, Hive auto-installs all dependencies (RTK binary for token reduction, agent-booster for fast editing, CLI tools for code navigation).
+
+> Requires OpenCode 2.x (V2 plugin API). For OpenCode 1.x, use release ≤ 1.21.x.
 
 ## The Workflow
 

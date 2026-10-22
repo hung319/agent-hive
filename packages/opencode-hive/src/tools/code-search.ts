@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { tool, type ToolDefinition } from '@opencode-ai/plugin';
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 
 // ============================================================================
 // BM25 Implementation (pure TypeScript, no external deps)
@@ -433,7 +433,7 @@ export async function runCodeSearch(
 // Tool Definitions
 // ============================================================================
 
-export const codeSearchTool: ToolDefinition = tool({
+export const codeSearchTool: ToolDefinition = tool("code_search", {
   description: `Search code using BM25 keyword + AST pattern + symbol fusion.
 
 **Parameters:**
@@ -471,7 +471,7 @@ code_search({ query: "function authenticate", path: "./src" })
   },
 });
 
-export const codeSearchIndexTool: ToolDefinition = tool({
+export const codeSearchIndexTool: ToolDefinition = tool("code_search_index", {
   description: `Build or rebuild the BM25 search index.
 
 **Parameters:**
@@ -506,7 +506,7 @@ Returns the number of files indexed and unique terms found.`,
   },
 });
 
-export const codeSearchStatusTool: ToolDefinition = tool({
+export const codeSearchStatusTool: ToolDefinition = tool("code_search_status", {
   description: `Check BM25 search index status.
 
 Returns the number of files indexed, unique terms, and the indexed path.`,

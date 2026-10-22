@@ -18,13 +18,15 @@ var __toESM = (mod, isNodeMode, target) => {
       return cached;
   }
   target = mod != null ? __create(__getProtoOf(mod)) : {};
-  const to = isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target;
-  for (let key of __getOwnPropNames(mod))
-    if (!__hasOwnProp.call(to, key))
-      __defProp(to, key, {
-        get: __accessProp.bind(mod, key),
-        enumerable: true
-      });
+  const to = isNodeMode || !mod || !mod.__esModule || !__hasOwnProp.call(mod, "default") ? __defProp(target, "default", { value: mod, enumerable: true }) : target;
+  if (mod && typeof mod === "object" || typeof mod === "function") {
+    for (let key of __getOwnPropNames(mod))
+      if (!__hasOwnProp.call(to, key))
+        __defProp(to, key, {
+          get: __accessProp.bind(mod, key),
+          enumerable: true
+        });
+  }
   if (canCache)
     cache.set(mod, to);
   return to;
@@ -33,7 +35,7 @@ var __commonJS = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, 
 var __require = /* @__PURE__ */ createRequire(import.meta.url);
 
 // ../../node_modules/.bun/ms@2.1.3/node_modules/ms/index.js
-var require_ms = __commonJS((exports, module) => {
+var require_ms = __commonJS(function(exports, module) {
   var s = 1000;
   var m = s * 60;
   var h = m * 60;
@@ -44,13 +46,13 @@ var require_ms = __commonJS((exports, module) => {
     options = options || {};
     var type = typeof val;
     if (type === "string" && val.length > 0) {
-      return parse2(val);
+      return parse(val);
     } else if (type === "number" && isFinite(val)) {
       return options.long ? fmtLong(val) : fmtShort(val);
     }
     throw new Error("val is not a non-empty string or a valid number. val=" + JSON.stringify(val));
   };
-  function parse2(str) {
+  function parse(str) {
     str = String(str);
     if (str.length > 100) {
       return;
@@ -143,7 +145,7 @@ var require_ms = __commonJS((exports, module) => {
 });
 
 // ../../node_modules/.bun/debug@4.4.3/node_modules/debug/src/common.js
-var require_common = __commonJS((exports, module) => {
+var require_common = __commonJS(function(exports, module) {
   function setup(env) {
     createDebug.debug = createDebug;
     createDebug.default = createDebug;
@@ -318,7 +320,7 @@ var require_common = __commonJS((exports, module) => {
 });
 
 // ../../node_modules/.bun/debug@4.4.3/node_modules/debug/src/browser.js
-var require_browser = __commonJS((exports, module) => {
+var require_browser = __commonJS(function(exports, module) {
   exports.formatArgs = formatArgs;
   exports.save = save;
   exports.load = load;
@@ -478,7 +480,7 @@ var require_browser = __commonJS((exports, module) => {
 });
 
 // ../../node_modules/.bun/debug@4.4.3/node_modules/debug/src/node.js
-var require_node = __commonJS((exports, module) => {
+var require_node = __commonJS(function(exports, module) {
   var tty = __require("tty");
   var util = __require("util");
   exports.init = init;
@@ -595,8 +597,8 @@ var require_node = __commonJS((exports, module) => {
     return "colors" in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(process.stderr.fd);
   }
   function formatArgs(args) {
-    const { namespace: name, useColors: useColors2 } = this;
-    if (useColors2) {
+    const { namespace: name, useColors } = this;
+    if (useColors) {
       const c = this.color;
       const colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
       const prefix = `  ${colorCode};1m${name} \x1B[0m`;
@@ -649,7 +651,7 @@ var require_node = __commonJS((exports, module) => {
 });
 
 // ../../node_modules/.bun/debug@4.4.3/node_modules/debug/src/index.js
-var require_src = __commonJS((exports, module) => {
+var require_src = __commonJS(function(exports, module) {
   if (typeof process === "undefined" || process.type === "renderer" || false || process.__nwjs) {
     module.exports = require_browser();
   } else {
@@ -658,7 +660,7 @@ var require_src = __commonJS((exports, module) => {
 });
 
 // ../../node_modules/.bun/@kwsites+file-exists@1.1.1/node_modules/@kwsites/file-exists/dist/src/index.js
-var require_src2 = __commonJS((exports) => {
+var require_src2 = __commonJS(function(exports) {
   var __importDefault = exports && exports.__importDefault || function(mod) {
     return mod && mod.__esModule ? mod : { default: mod };
   };
@@ -666,10 +668,10 @@ var require_src2 = __commonJS((exports) => {
   var fs_1 = __require("fs");
   var debug_1 = __importDefault(require_src());
   var log = debug_1.default("@kwsites/file-exists");
-  function check(path4, isFile, isDirectory) {
-    log(`checking %s`, path4);
+  function check(path, isFile, isDirectory) {
+    log(`checking %s`, path);
     try {
-      const stat = fs_1.statSync(path4);
+      const stat = fs_1.statSync(path);
       if (stat.isFile() && isFile) {
         log(`[OK] path represents a file`);
         return true;
@@ -689,8 +691,8 @@ var require_src2 = __commonJS((exports) => {
       throw e;
     }
   }
-  function exists(path4, type = exports.READABLE) {
-    return check(path4, (type & exports.FILE) > 0, (type & exports.FOLDER) > 0);
+  function exists(path, type = exports.READABLE) {
+    return check(path, (type & exports.FILE) > 0, (type & exports.FOLDER) > 0);
   }
   exports.exists = exists;
   exports.FILE = 1;
@@ -699,7 +701,7 @@ var require_src2 = __commonJS((exports) => {
 });
 
 // ../../node_modules/.bun/@kwsites+file-exists@1.1.1/node_modules/@kwsites/file-exists/dist/index.js
-var require_dist = __commonJS((exports) => {
+var require_dist = __commonJS(function(exports) {
   function __export(m) {
     for (var p in m)
       if (!exports.hasOwnProperty(p))
@@ -710,7 +712,7 @@ var require_dist = __commonJS((exports) => {
 });
 
 // ../../node_modules/.bun/@kwsites+promise-deferred@1.1.1/node_modules/@kwsites/promise-deferred/dist/index.js
-var require_dist2 = __commonJS((exports) => {
+var require_dist2 = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.createDeferred = exports.deferred = undefined;
   function deferred() {
@@ -1507,11 +1509,11 @@ class TaskService {
   }
   buildSpecContent(params) {
     const { featureName, task, dependsOn, allTasks, planContent, contextFiles = [], completedTasks = [] } = params;
-    const getTaskType = (planSection2, taskName) => {
-      if (!planSection2) {
+    const getTaskType = (planSection, taskName) => {
+      if (!planSection) {
         return null;
       }
-      const fileTypeMatches = Array.from(planSection2.matchAll(/-\s*(Create|Modify|Test):/gi)).map((match) => match[1].toLowerCase());
+      const fileTypeMatches = Array.from(planSection.matchAll(/-\s*(Create|Modify|Test):/gi)).map((match) => match[1].toLowerCase());
       const fileTypes = new Set(fileTypeMatches);
       if (fileTypes.size === 0) {
         return taskName.toLowerCase().includes("test") ? "testing" : null;
@@ -1631,20 +1633,20 @@ ${f.content}`).join(`
       return [task.order - 1];
     };
     const visited = new Map;
-    const path4 = [];
+    const path = [];
     const dfs = (taskOrder) => {
       const state = visited.get(taskOrder);
       if (state === 2) {
         return;
       }
       if (state === 1) {
-        const cycleStart = path4.indexOf(taskOrder);
-        const cyclePath = [...path4.slice(cycleStart), taskOrder];
+        const cycleStart = path.indexOf(taskOrder);
+        const cyclePath = [...path.slice(cycleStart), taskOrder];
         const cycleDesc = cyclePath.join(" -> ");
         throw new Error(`Invalid dependency graph in plan.md: Cycle detected in task dependencies: ${cycleDesc}. ` + `Tasks cannot have circular dependencies. Please fix the "Depends on:" lines in plan.md.`);
       }
       visited.set(taskOrder, 1);
-      path4.push(taskOrder);
+      path.push(taskOrder);
       const task = taskByOrder.get(taskOrder);
       if (task) {
         const deps = getDependencies(task);
@@ -1652,7 +1654,7 @@ ${f.content}`).join(`
           dfs(depOrder);
         }
       }
-      path4.pop();
+      path.pop();
       visited.set(taskOrder, 2);
     };
     for (const task of tasks) {
@@ -2158,10 +2160,10 @@ var import_promise_deferred = __toESM(require_dist2(), 1);
 import { normalize } from "node:path";
 
 // ../../node_modules/.bun/@simple-git+argv-parser@1.1.1/node_modules/@simple-git/argv-parser/dist/index.mjs
-function* U(e, t2) {
-  const n = t2 === "global";
-  for (const o2 of e)
-    o2.isGlobal === n && (yield o2);
+function* U(e, t) {
+  const n = t === "global";
+  for (const o of e)
+    o.isGlobal === n && (yield o);
 }
 var k = /* @__PURE__ */ new Set([
   "--add",
@@ -2191,38 +2193,38 @@ var P = /* @__PURE__ */ new Set([
   "unset"
 ]);
 var E = /* @__PURE__ */ new Set(["get", "get-color", "get-colorbool", "list"]);
-function F(e, t2) {
-  for (const { name: o2 } of U(e, "task")) {
-    if (k.has(o2))
-      return p(true, t2);
-    if (S.has(o2))
-      return p(false, t2);
+function F(e, t) {
+  for (const { name: o } of U(e, "task")) {
+    if (k.has(o))
+      return p(true, t);
+    if (S.has(o))
+      return p(false, t);
   }
-  const n = t2.at(0)?.toLowerCase();
-  return n === undefined ? null : P.has(n) ? p(true, t2.slice(1)) : E.has(n) ? p(false, t2.slice(1)) : t2.length === 1 ? p(false, t2) : p(true, t2);
+  const n = t.at(0)?.toLowerCase();
+  return n === undefined ? null : P.has(n) ? p(true, t.slice(1)) : E.has(n) ? p(false, t.slice(1)) : t.length === 1 ? p(false, t) : p(true, t);
 }
-function p(e = false, t2 = []) {
-  const n = t2.at(0)?.toLowerCase();
+function p(e = false, t = []) {
+  const n = t.at(0)?.toLowerCase();
   return n === undefined ? null : {
     isWrite: e,
     isRead: !e,
     key: n,
-    value: t2.at(1)
+    value: t.at(1)
   };
 }
-function A(e, t2) {
-  return t2.isWrite && t2.value !== undefined ? { key: t2.key, value: t2.value, scope: e } : { key: t2.key, scope: e };
+function A(e, t) {
+  return t.isWrite && t.value !== undefined ? { key: t.key, value: t.value, scope: e } : { key: t.key, scope: e };
 }
 function M(e) {
-  const t2 = e?.indexOf("=") || -1;
-  return !e || t2 < 0 ? null : {
-    key: e.slice(0, t2).trim().toLowerCase(),
-    value: e.slice(t2 + 1)
+  const t = e?.indexOf("=") || -1;
+  return !e || t < 0 ? null : {
+    key: e.slice(0, t).trim().toLowerCase(),
+    value: e.slice(t + 1)
   };
 }
 function N(e) {
-  for (const { name: t2 } of U(e, "task"))
-    switch (t2) {
+  for (const { name: t } of U(e, "task"))
+    switch (t) {
       case "--global":
         return "global";
       case "--system":
@@ -2244,26 +2246,26 @@ function G({ name: e }) {
     return "env";
 }
 function* O(e) {
-  for (const t2 of e) {
-    const n = G(t2), o2 = n && M(t2.value);
-    o2 && (yield {
-      ...o2,
+  for (const t of e) {
+    const n = G(t), o = n && M(t.value);
+    o && (yield {
+      ...o,
       scope: n
     });
   }
 }
-function L(e, t2, n) {
-  const o2 = {
+function L(e, t, n) {
+  const o = {
     read: [],
-    write: [...O(t2)]
+    write: [...O(t)]
   };
-  return e === "config" && $(o2, N(t2), F(t2, n)), o2;
+  return e === "config" && $(o, N(t), F(t, n)), o;
 }
-function $(e, t2, n) {
+function $(e, t, n) {
   if (n === null)
     return;
-  const o2 = A(t2, n);
-  n.isWrite ? e.write.push(o2) : e.read.push(o2);
+  const o = A(t, n);
+  n.isWrite ? e.write.push(o) : e.read.push(o);
 }
 var x = {
   short: /* @__PURE__ */ new Map([
@@ -2341,49 +2343,49 @@ var R = {
 };
 var T = { short: /* @__PURE__ */ new Map, long: /* @__PURE__ */ new Set };
 function I(e) {
-  const t2 = R[e ?? ""] ?? T;
+  const t = R[e ?? ""] ?? T;
   return {
-    short: new Map([...x.short.entries(), ...t2.short.entries()]),
-    long: t2.long
+    short: new Map([...x.short.entries(), ...t.short.entries()]),
+    long: t.long
   };
 }
-function b(e, t2 = D) {
+function b(e, t = D) {
   if (e.startsWith("--")) {
     const n = e.indexOf("=");
     if (n > 2)
       return [{ name: e.slice(0, n), value: e.slice(n + 1), needsNext: false }];
-    const o2 = e.slice(2);
-    return [{ name: e, needsNext: t2.long.has(o2) }];
+    const o = e.slice(2);
+    return [{ name: e, needsNext: t.long.has(o) }];
   }
   if (e.length === 2) {
-    const n = e.charAt(1), o2 = t2.short.get(n);
-    return [{ name: e, needsNext: o2 === true }];
+    const n = e.charAt(1), o = t.short.get(n);
+    return [{ name: e, needsNext: o === true }];
   }
-  return W(e, t2.short);
+  return W(e, t.short);
 }
-function W(e, t2) {
-  const n = e.slice(1).split(""), o2 = [];
+function W(e, t) {
+  const n = e.slice(1).split(""), o = [];
   for (let s = 0;s < n.length; s++) {
-    const r2 = n[s], l = t2.get(r2);
+    const r = n[s], l = t.get(r);
     if (l === undefined)
       return [{ name: e, needsNext: false }];
     if (l) {
       const a = n.slice(s + 1).join("");
-      if (a && ![...a].every((w) => t2.has(w)))
-        return o2.push({ name: `-${r2}`, value: a, needsNext: false }), o2;
+      if (a && ![...a].every((w) => t.has(w)))
+        return o.push({ name: `-${r}`, value: a, needsNext: false }), o;
     }
-    o2.push({ name: `-${r2}`, needsNext: l });
+    o.push({ name: `-${r}`, needsNext: l });
   }
-  return o2;
+  return o;
 }
-function j(e, t2 = []) {
+function j(e, t = []) {
   let n = 0;
   for (;n < e.length; ) {
-    const o2 = String(e[n]);
-    if (!o2.startsWith("-") || o2.length < 2)
+    const o = String(e[n]);
+    if (!o.startsWith("-") || o.length < 2)
       break;
-    const s = b(o2);
-    let r2 = n + 1;
+    const s = b(o);
+    let r = n + 1;
     for (const l of s) {
       const a = {
         name: l.name,
@@ -2391,14 +2393,14 @@ function j(e, t2 = []) {
         absorbedNext: false,
         isGlobal: true
       };
-      l.needsNext && a.value === undefined && r2 < e.length && (a.value = String(e[r2]), a.absorbedNext = true, r2++), t2.push(a);
+      l.needsNext && a.value === undefined && r < e.length && (a.value = String(e[r]), a.absorbedNext = true, r++), t.push(a);
     }
-    n = r2;
+    n = r;
   }
-  return { flags: t2, taskIndex: n };
+  return { flags: t, taskIndex: n };
 }
-function B(e, t2, n = []) {
-  const o2 = I(t2), s = [], r2 = [];
+function B(e, t, n = []) {
+  const o2 = I(t), s = [], r2 = [];
   let l = 0;
   for (;l < e.length; ) {
     const a = e[l];
@@ -2436,25 +2438,25 @@ function B(e, t2, n = []) {
 function* V({
   write: e
 }) {
-  for (const t2 of e)
+  for (const t of e)
     for (const n of q) {
-      const o2 = n(t2.key);
-      o2 && (yield o2);
+      const o = n(t.key);
+      o && (yield o);
     }
 }
-function c2(e, t2, n = String(e)) {
-  const o2 = typeof e == "string" ? new RegExp(`\\s*${e.toLowerCase()}`) : e;
-  return function(r2) {
-    if (o2.test(r2))
+function c2(e, t, n = String(e)) {
+  const o = typeof e == "string" ? new RegExp(`\\s*${e.toLowerCase()}`) : e;
+  return function(r) {
+    if (o.test(r))
       return {
-        category: t2,
-        message: `Configuring ${n} is not permitted without enabling ${t2}`
+        category: t,
+        message: `Configuring ${n} is not permitted without enabling ${t}`
       };
   };
 }
-function i(e, t2) {
+function i(e, t) {
   const n = new RegExp(`\\s*${e.toLowerCase().replace(/\./g, "(..+)?.")}`);
-  return c2(n, t2, e);
+  return c2(n, t, e);
 }
 var q = [
   c2("alias", "allowUnsafeAlias"),
@@ -2481,20 +2483,20 @@ var q = [
   i("remote.uploadpack", "allowUnsafePack"),
   c2("sequence.editor", "allowUnsafeEditor")
 ];
-function* K(e, t2) {
-  for (const n of t2)
-    for (const o2 of H) {
-      const s = o2(e, n.name);
+function* K(e, t) {
+  for (const n of t)
+    for (const o of H) {
+      const s = o(e, n.name);
       s && (yield s);
     }
 }
-function h(e, t2, n, o2 = String(t2)) {
-  const s = typeof t2 == "string" ? new RegExp(`\\s*${t2.toLowerCase()}`) : t2, r2 = `Use of ${e ? `${e} with option ` : ""}${o2} is not permitted without enabling ${n}`;
+function h(e, t, n, o = String(t)) {
+  const s = typeof t == "string" ? new RegExp(`\\s*${t.toLowerCase()}`) : t, r = `Use of ${e ? `${e} with option ` : ""}${o} is not permitted without enabling ${n}`;
   return function(a, f) {
     if ((!e || a === e) && s.test(f))
       return {
         category: n,
-        message: r2
+        message: r
       };
   };
 }
@@ -2505,17 +2507,17 @@ var H = [
   h("push", "--exec", "allowUnsafePack"),
   h(null, "--template", "allowUnsafeTemplateDir")
 ];
-function C(e, t2, n) {
-  return [...K(e, t2), ...V(n)];
+function C(e, t, n) {
+  return [...K(e, t), ...V(n)];
 }
 function Y(...e) {
-  const { flags: t2, taskIndex: n } = j(e), o2 = n < e.length ? String(e[n]).toLowerCase() : null, s = o2 !== null ? e.slice(n + 1) : [], { positionals: r2, pathspecs: l } = B(s, o2, t2), a = L(o2, t2, r2);
+  const { flags: t, taskIndex: n } = j(e), o = n < e.length ? String(e[n]).toLowerCase() : null, s = o !== null ? e.slice(n + 1) : [], { positionals: r, pathspecs: l } = B(s, o, t), a = L(o, t, r);
   return {
-    task: o2,
-    flags: t2.map(J),
+    task: o,
+    flags: t.map(J),
     paths: l,
     config: a,
-    vulnerabilities: z(C(o2, t2, a))
+    vulnerabilities: z(C(o, t, a))
   };
 }
 function z(e) {
@@ -2523,8 +2525,8 @@ function z(e) {
     value: e
   });
 }
-function J({ value: e, name: t2 }) {
-  return e !== undefined ? { name: t2, value: e } : { name: t2 };
+function J({ value: e, name: t }) {
+  return e !== undefined ? { name: t, value: e } : { name: t };
 }
 var y = {
   editor: "allowUnsafeEditor",
@@ -2547,19 +2549,19 @@ var y = {
   ssh_askpass: "allowUnsafeAskPass"
 };
 function* Q(e) {
-  const t2 = parseInt(e.git_config_count ?? "0", 10);
-  for (let n = 0;n < t2; n++) {
-    const o2 = e[`git_config_key_${n}`], s = e[`git_config_value_${n}`];
-    o2 !== undefined && (yield { key: o2.toLowerCase().trim(), value: s, scope: "env" });
+  const t = parseInt(e.git_config_count ?? "0", 10);
+  for (let n = 0;n < t; n++) {
+    const o = e[`git_config_key_${n}`], s = e[`git_config_value_${n}`];
+    o !== undefined && (yield { key: o.toLowerCase().trim(), value: s, scope: "env" });
   }
 }
 function* X(e) {
-  for (const t2 of Object.keys(e))
-    if (_(t2)) {
-      const n = y[t2];
+  for (const t of Object.keys(e))
+    if (_(t)) {
+      const n = y[t];
       yield {
         category: n,
-        message: `Use of "${t2.toUpperCase()}" is not permitted without enabling ${n}`
+        message: `Use of "${t.toUpperCase()}" is not permitted without enabling ${n}`
       };
     }
 }
@@ -2567,28 +2569,28 @@ function _(e) {
   return Object.hasOwn(y, e);
 }
 function Z(e) {
-  const t2 = {};
-  for (const [n, o2] of Object.entries(e)) {
+  const t = {};
+  for (const [n, o] of Object.entries(e)) {
     const s = n.toLowerCase().trim();
-    (_(s) || s.startsWith("git")) && (t2[s] = String(o2));
+    (_(s) || s.startsWith("git")) && (t[s] = String(o));
   }
-  return t2;
+  return t;
 }
 function ee(e) {
-  const t2 = Z(e), n = {
+  const t = Z(e), n = {
     read: [],
-    write: [...Q(t2)]
-  }, o2 = [
-    ...X(t2),
+    write: [...Q(t)]
+  }, o = [
+    ...X(t),
     ...C(null, [], n)
   ];
   return {
     config: n,
-    vulnerabilities: o2
+    vulnerabilities: o
   };
 }
-function ne(e, t2) {
-  return [...Y(...e).vulnerabilities, ...ee(t2).vulnerabilities];
+function ne(e, t) {
+  return [...Y(...e).vulnerabilities, ...ee(t).vulnerabilities];
 }
 
 // ../../node_modules/.bun/simple-git@3.36.0/node_modules/simple-git/dist/esm/index.js
@@ -2601,7 +2603,7 @@ var __hasOwnProp2 = Object.prototype.hasOwnProperty;
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames2(fn)[0]])(fn = 0)), res;
 };
-var __commonJS2 = (cb, mod) => function __require2() {
+var __commonJS2 = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames2(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 var __export = (target, all) => {
@@ -2692,8 +2694,8 @@ function toLinesWithContent(input = "", trimmed2 = true, separator = `
 function forEachLineWithContent(input, callback) {
   return toLinesWithContent(input, true).map((line) => callback(line));
 }
-function folderExists(path4) {
-  return import_file_exists.exists(path4, import_file_exists.FOLDER);
+function folderExists(path) {
+  return import_file_exists.exists(path, import_file_exists.FOLDER);
 }
 function append(target, item) {
   if (Array.isArray(target)) {
@@ -2744,8 +2746,8 @@ function asNumber(source, onNaN = 0) {
 }
 function prefixedArray(input, prefix) {
   const output = [];
-  for (let i2 = 0, max = input.length;i2 < max; i2++) {
-    output.push(prefix, input[i2]);
+  for (let i = 0, max = input.length;i < max; i++) {
+    output.push(prefix, input[i]);
   }
   return output;
 }
@@ -2905,7 +2907,7 @@ var init_line_parser = __esm({
 });
 function createInstanceConfig(...options) {
   const baseDir = process.cwd();
-  const config = Object.assign({ baseDir, ...defaultOptions }, ...options.filter((o2) => typeof o2 === "object" && o2));
+  const config = Object.assign({ baseDir, ...defaultOptions }, ...options.filter((o) => typeof o === "object" && o));
   config.baseDir = config.baseDir || baseDir;
   config.trimmed = config.trimmed === true;
   return config;
@@ -2945,9 +2947,9 @@ function appendTaskOptions(options, commands = []) {
 }
 function getTrailingOptions(args, initialPrimitive = 0, objectOnly = false) {
   const command = [];
-  for (let i2 = 0, max = initialPrimitive < 0 ? args.length : initialPrimitive;i2 < max; i2++) {
-    if ("string|number".includes(typeof args[i2])) {
-      command.push(String(args[i2]));
+  for (let i = 0, max = initialPrimitive < 0 ? args.length : initialPrimitive;i < max; i++) {
+    if ("string|number".includes(typeof args[i])) {
+      command.push(String(args[i]));
     }
   }
   appendTaskOptions(trailingOptionsArgument(args), command);
@@ -2979,14 +2981,14 @@ function callTaskParser(parser4, streams) {
 }
 function parseStringResponse(result, parsers12, texts, trim = true) {
   asArray(texts).forEach((text) => {
-    for (let lines = toLinesWithContent(text, trim), i2 = 0, max = lines.length;i2 < max; i2++) {
+    for (let lines = toLinesWithContent(text, trim), i = 0, max = lines.length;i < max; i++) {
       const line = (offset = 0) => {
-        if (i2 + offset >= max) {
+        if (i + offset >= max) {
           return;
         }
-        return lines[i2 + offset];
+        return lines[i + offset];
       };
-      parsers12.some(({ parse: parse2 }) => parse2(line, result));
+      parsers12.some(({ parse }) => parse(line, result));
     }
   });
   return result;
@@ -3082,8 +3084,8 @@ function checkIsRepoRootTask() {
     commands,
     format: "utf-8",
     onError,
-    parser(path4) {
-      return /^\.(git)?$/.test(path4.trim());
+    parser(path) {
+      return /^\.(git)?$/.test(path.trim());
     }
   };
 }
@@ -3339,9 +3341,9 @@ function configFilePath(filePath) {
 }
 function* configParser(text, requestedKey = null) {
   const lines = text.split("\x00");
-  for (let i2 = 0, max = lines.length - 1;i2 < max; ) {
-    const file = configFilePath(lines[i2++]);
-    let value = lines[i2++];
+  for (let i = 0, max = lines.length - 1;i < max; ) {
+    const file = configFilePath(lines[i++]);
+    let value = lines[i++];
     let key = requestedKey;
     if (value.includes(`
 `)) {
@@ -3494,11 +3496,11 @@ function parseGrep(grep) {
   const paths = /* @__PURE__ */ new Set;
   const results = {};
   forEachLineWithContent(grep, (input) => {
-    const [path4, line, preview] = input.split(NULL);
-    paths.add(path4);
-    (results[path4] = results[path4] || []).push({
+    const [path, line, preview] = input.split(NULL);
+    paths.add(path);
+    (results[path] = results[path] || []).push({
       line: asNumber(line),
-      path: path4,
+      path,
       preview
     });
   });
@@ -4167,14 +4169,14 @@ var init_hash_object = __esm({
     init_task();
   }
 });
-function parseInit(bare, path4, text) {
+function parseInit(bare, path, text) {
   const response = String(text).trim();
   let result;
   if (result = initResponseRegex.exec(response)) {
-    return new InitSummary(bare, path4, false, result[1]);
+    return new InitSummary(bare, path, false, result[1]);
   }
   if (result = reInitResponseRegex.exec(response)) {
-    return new InitSummary(bare, path4, true, result[1]);
+    return new InitSummary(bare, path, true, result[1]);
   }
   let gitDir = "";
   const tokens = response.split(" ");
@@ -4185,7 +4187,7 @@ function parseInit(bare, path4, text) {
       break;
     }
   }
-  return new InitSummary(bare, path4, /^re/i.test(response), gitDir);
+  return new InitSummary(bare, path, /^re/i.test(response), gitDir);
 }
 var InitSummary;
 var initResponseRegex;
@@ -4193,9 +4195,9 @@ var reInitResponseRegex;
 var init_InitSummary = __esm({
   "src/lib/responses/InitSummary.ts"() {
     InitSummary = class {
-      constructor(bare, path4, existing, gitDir) {
+      constructor(bare, path, existing, gitDir) {
         this.bare = bare;
-        this.path = path4;
+        this.path = path;
         this.existing = existing;
         this.gitDir = gitDir;
       }
@@ -4207,7 +4209,7 @@ var init_InitSummary = __esm({
 function hasBareCommand(command) {
   return command.includes(bareCommand);
 }
-function initTask(bare = false, path4, customArgs) {
+function initTask(bare = false, path, customArgs) {
   const commands = ["init", ...customArgs];
   if (bare && !hasBareCommand(commands)) {
     commands.splice(1, 0, bareCommand);
@@ -4216,7 +4218,7 @@ function initTask(bare = false, path4, customArgs) {
     commands,
     format: "utf-8",
     parser(text) {
-      return parseInit(commands.includes("--bare"), path4, text);
+      return parseInit(commands.includes("--bare"), path, text);
     }
   };
 }
@@ -4228,8 +4230,8 @@ var init_init = __esm({
   }
 });
 function logFormatFromCommand(customArgs) {
-  for (let i2 = 0;i2 < customArgs.length; i2++) {
-    const format = logFormatRegex.exec(customArgs[i2]);
+  for (let i = 0;i < customArgs.length; i++) {
+    const format = logFormatRegex.exec(customArgs[i]);
     if (format) {
       return `--${format[1]}`;
     }
@@ -4930,12 +4932,12 @@ var init_FileStatusSummary = __esm({
   "src/lib/responses/FileStatusSummary.ts"() {
     fromPathRegex = /^(.+)\0(.+)$/;
     FileStatusSummary = class {
-      constructor(path4, index, working_dir) {
-        this.path = path4;
+      constructor(path, index, working_dir) {
+        this.path = path;
         this.index = index;
         this.working_dir = working_dir;
         if (index === "R" || working_dir === "R") {
-          const detail = fromPathRegex.exec(path4) || [null, path4, path4];
+          const detail = fromPathRegex.exec(path) || [null, path, path];
           this.from = detail[2] || "";
           this.path = detail[1] || "";
         }
@@ -4954,7 +4956,7 @@ function parser3(indexX, indexY, handler) {
   return [`${indexX}${indexY}`, handler];
 }
 function conflicts(indexX, ...indexY) {
-  return indexY.map((y2) => parser3(indexX, y2, (result, file) => result.conflicted.push(file)));
+  return indexY.map((y) => parser3(indexX, y, (result, file) => result.conflicted.push(file)));
 }
 function splitLine(result, lineStr) {
   const trimmed2 = lineStr.trim();
@@ -4966,14 +4968,14 @@ function splitLine(result, lineStr) {
     default:
       return;
   }
-  function data(index, workingDir, path4) {
+  function data(index, workingDir, path) {
     const raw = `${index}${workingDir}`;
     const handler = parsers6.get(raw);
     if (handler) {
-      handler(result, path4);
+      handler(result, path);
     }
     if (raw !== "##" && raw !== "!!") {
-      result.files.push(new FileStatusSummary(path4, index, workingDir));
+      result.files.push(new FileStatusSummary(path, index, workingDir));
     }
   }
 }
@@ -5072,13 +5074,13 @@ var init_StatusSummary = __esm({
     parseStatusSummary = function(text) {
       const lines = text.split(NULL);
       const status = new StatusSummary;
-      for (let i2 = 0, l = lines.length;i2 < l; ) {
-        let line = lines[i2++].trim();
+      for (let i = 0, l = lines.length;i < l; ) {
+        let line = lines[i++].trim();
         if (!line) {
           continue;
         }
         if (line.charAt(0) === "R") {
-          line += NULL + (lines[i2++] || "");
+          line += NULL + (lines[i++] || "");
         }
         splitLine(status, line);
       }
@@ -5256,8 +5258,8 @@ var init_simple_git_api = __esm({
         }
         return this._runTask(configurationErrorTask("Git.cwd: workingDirectory must be supplied as a string"), next);
       }
-      hashObject(path4, write) {
-        return this._runTask(hashObjectTask(path4, write === true), trailingFunctionArgument(arguments));
+      hashObject(path, write) {
+        return this._runTask(hashObjectTask(path, write === true), trailingFunctionArgument(arguments));
       }
       init(bare) {
         return this._runTask(initTask(bare === true, this._executor.cwd, getTrailingOptions(arguments)), trailingFunctionArgument(arguments));
@@ -5532,7 +5534,7 @@ function deleteBranchTask(branch, forceDelete = false) {
     parser(stdOut, stdErr) {
       return parseBranchDeletions(stdOut, stdErr).branches[branch];
     },
-    onError({ exitCode, stdErr, stdOut }, error, _2, fail) {
+    onError({ exitCode, stdErr, stdOut }, error, _, fail) {
       if (!hasBranchDeletionError(String(error), exitCode)) {
         return fail(error);
       }
@@ -5550,8 +5552,8 @@ var init_branch = __esm({
   }
 });
 function toPath(input) {
-  const path4 = input.trim().replace(/^["']|["']$/g, "");
-  return path4 && normalize(path4);
+  const path = input.trim().replace(/^["']|["']$/g, "");
+  return path && normalize(path);
 }
 var parseCheckIgnore;
 var init_CheckIgnore = __esm({
@@ -5816,8 +5818,8 @@ __export(sub_module_exports, {
   subModuleTask: () => subModuleTask,
   updateSubModuleTask: () => updateSubModuleTask
 });
-function addSubModuleTask(repo, path4) {
-  return subModuleTask(["add", repo, path4]);
+function addSubModuleTask(repo, path) {
+  return subModuleTask(["add", repo, path]);
 }
 function initSubModuleTask(customArgs) {
   return subModuleTask(["init", ...customArgs]);
@@ -5837,16 +5839,16 @@ var init_sub_module = __esm({
     init_task();
   }
 });
-function singleSorted(a, b2) {
+function singleSorted(a, b) {
   const aIsNum = Number.isNaN(a);
-  const bIsNum = Number.isNaN(b2);
+  const bIsNum = Number.isNaN(b);
   if (aIsNum !== bIsNum) {
     return aIsNum ? 1 : -1;
   }
-  return aIsNum ? sorted(a, b2) : 0;
+  return aIsNum ? sorted(a, b) : 0;
 }
-function sorted(a, b2) {
-  return a === b2 ? 0 : a > b2 ? 1 : -1;
+function sorted(a, b) {
+  return a === b ? 0 : a > b ? 1 : -1;
 }
 function trimmed(input) {
   return input.trim();
@@ -5877,8 +5879,8 @@ var init_TagList = __esm({
           if (partsA.length === 1 || partsB.length === 1) {
             return singleSorted(toNumber(partsA[0]), toNumber(partsB[0]));
           }
-          for (let i2 = 0, l = Math.max(partsA.length, partsB.length);i2 < l; i2++) {
-            const diff = sorted(toNumber(partsA[i2]), toNumber(partsB[i2]));
+          for (let i = 0, l = Math.max(partsA.length, partsB.length);i < l; i++) {
+            const diff = sorted(toNumber(partsA[i]), toNumber(partsB[i]));
             if (diff) {
               return diff;
             }
@@ -6058,9 +6060,9 @@ var require_git = __commonJS2({
     Git2.prototype.raw = function(commands) {
       const createRestCommands = !Array.isArray(commands);
       const command = [].slice.call(createRestCommands ? arguments : commands, 0);
-      for (let i2 = 0;i2 < command.length && createRestCommands; i2++) {
-        if (!filterPrimitives2(command[i2])) {
-          command.splice(i2, command.length - i2);
+      for (let i = 0;i < command.length && createRestCommands; i++) {
+        if (!filterPrimitives2(command[i])) {
+          command.splice(i, command.length - i);
           break;
         }
       }
@@ -6071,8 +6073,8 @@ var require_git = __commonJS2({
       }
       return this._runTask(straightThroughStringTask2(command, this._trimmed), next);
     };
-    Git2.prototype.submoduleAdd = function(repo, path4, then) {
-      return this._runTask(addSubModuleTask2(repo, path4), trailingFunctionArgument2(arguments));
+    Git2.prototype.submoduleAdd = function(repo, path, then) {
+      return this._runTask(addSubModuleTask2(repo, path), trailingFunctionArgument2(arguments));
     };
     Git2.prototype.submoduleUpdate = function(args, then) {
       return this._runTask(updateSubModuleTask2(getTrailingOptions2(arguments, true)), trailingFunctionArgument2(arguments));
@@ -6513,14 +6515,14 @@ function suffixPathsPlugin() {
       function append2(args) {
         (suffix = suffix || []).push(...args);
       }
-      for (let i2 = 0;i2 < data.length; i2++) {
-        const param = data[i2];
+      for (let i = 0;i < data.length; i++) {
+        const param = data[i];
         if (r(param)) {
           append2(o(param));
           continue;
         }
         if (param === "--") {
-          append2(data.slice(i2 + 1).flatMap((item) => r(item) && o(item) || item));
+          append2(data.slice(i + 1).flatMap((item) => r(item) && o(item) || item));
           break;
         }
         prefix.push(param);
@@ -6664,15 +6666,15 @@ class WorktreeService {
       const status = await worktreeGit.status();
       const hasStaged = status.staged.length > 0;
       let diffContent = "";
-      let stat2 = "";
+      let stat = "";
       if (hasStaged) {
         diffContent = await worktreeGit.diff(["--cached"]);
-        stat2 = diffContent ? await worktreeGit.diff(["--cached", "--stat"]) : "";
+        stat = diffContent ? await worktreeGit.diff(["--cached", "--stat"]) : "";
       } else {
         diffContent = await worktreeGit.diff([`${base}..HEAD`]).catch(() => "");
-        stat2 = diffContent ? await worktreeGit.diff([`${base}..HEAD`, "--stat"]) : "";
+        stat = diffContent ? await worktreeGit.diff([`${base}..HEAD`, "--stat"]) : "";
       }
-      const statLines = stat2.split(`
+      const statLines = stat.split(`
 `).filter((l) => l.trim());
       const filesChanged = statLines.slice(0, -1).map((line) => line.split("|")[0].trim()).filter(Boolean);
       const summaryLine = statLines[statLines.length - 1] || "";
@@ -6861,12 +6863,12 @@ class WorktreeService {
       await fs7.unlink(patchPath).catch(() => {});
       const err = error;
       const stderr = err.message || "";
-      const conflicts2 = stderr.split(`
+      const conflicts = stderr.split(`
 `).filter((line) => line.includes("error: patch failed:")).map((line) => {
         const match = line.match(/error: patch failed: (.+):/);
         return match ? match[1] : null;
       }).filter((f) => f !== null);
-      return conflicts2;
+      return conflicts;
     }
   }
   async checkConflictsFromSavedDiff(diffPath, reverse = false) {
@@ -6883,12 +6885,12 @@ class WorktreeService {
     } catch (error) {
       const err = error;
       const stderr = err.message || "";
-      const conflicts2 = stderr.split(`
+      const conflicts = stderr.split(`
 `).filter((line) => line.includes("error: patch failed:")).map((line) => {
         const match = line.match(/error: patch failed: (.+):/);
         return match ? match[1] : null;
       }).filter((f) => f !== null);
-      return conflicts2;
+      return conflicts;
     }
   }
   async commitChanges(feature, step, message) {
@@ -6966,7 +6968,7 @@ class WorktreeService {
           merged: !result.failed,
           sha: head,
           filesChanged,
-          conflicts: result.conflicts?.map((c3) => c3.file || String(c3)) || []
+          conflicts: result.conflicts?.map((c) => c.file || String(c)) || []
         };
       }
     } catch (error) {
@@ -7000,17 +7002,17 @@ class WorktreeService {
     }
   }
   parseConflictsFromError(errorMessage) {
-    const conflicts2 = [];
+    const conflicts = [];
     const lines = errorMessage.split(`
 `);
     for (const line of lines) {
       if (line.includes("CONFLICT") && line.includes("Merge conflict in")) {
         const match = line.match(/Merge conflict in (.+)/);
         if (match)
-          conflicts2.push(match[1]);
+          conflicts.push(match[1]);
       }
     }
-    return conflicts2;
+    return conflicts;
   }
 }
 function createWorktreeService(projectDir) {
@@ -7032,7 +7034,7 @@ class ContextService {
     ensureDir(contextPath);
     const filePath = path5.join(contextPath, this.normalizeFileName(fileName));
     writeText(filePath, content);
-    const totalChars = this.list(featureName).reduce((sum, c3) => sum + c3.content.length, 0);
+    const totalChars = this.list(featureName).reduce((sum, c) => sum + c.content.length, 0);
     if (totalChars > 20000) {
       return `${filePath}
 
@@ -7052,12 +7054,12 @@ class ContextService {
     const files = fs8.readdirSync(contextPath, { withFileTypes: true }).filter((f) => f.isFile() && f.name.endsWith(".md")).map((f) => f.name);
     return files.map((name) => {
       const filePath = path5.join(contextPath, name);
-      const stat2 = fs8.statSync(filePath);
+      const stat = fs8.statSync(filePath);
       const content = readText(filePath) || "";
       return {
         name: name.replace(/\.md$/, ""),
         content,
-        updatedAt: stat2.mtime.toISOString()
+        updatedAt: stat.mtime.toISOString()
       };
     });
   }
@@ -7106,12 +7108,12 @@ ${f.content}`);
     const contexts = this.list(featureName);
     if (contexts.length === 0)
       return { count: 0, totalChars: 0 };
-    const sorted2 = [...contexts].sort((a, b2) => new Date(a.updatedAt).getTime() - new Date(b2.updatedAt).getTime());
+    const sorted = [...contexts].sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
     return {
       count: contexts.length,
-      totalChars: contexts.reduce((sum, c3) => sum + c3.content.length, 0),
-      oldest: sorted2[0].name,
-      newest: sorted2[sorted2.length - 1].name
+      totalChars: contexts.reduce((sum, c) => sum + c.content.length, 0),
+      oldest: sorted[0].name,
+      newest: sorted[sorted.length - 1].name
     };
   }
   normalizeFileName(name) {
@@ -7503,11 +7505,11 @@ class AgentsMdService {
       const lines = context.content.split(`
 `);
       for (const line of lines) {
-        const trimmed2 = line.trim();
-        if (!trimmed2 || trimmed2.startsWith("#"))
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#"))
           continue;
         for (const pattern of patterns) {
-          const matches = trimmed2.match(pattern);
+          const matches = trimmed.match(pattern);
           if (matches) {
             for (const match of matches) {
               const finding = match.trim();
@@ -7535,7 +7537,7 @@ class AgentsMdService {
   formatDiff(current, proposals) {
     if (proposals.length === 0)
       return "";
-    const lines = proposals.map((p2) => `+ ${p2}`);
+    const lines = proposals.map((p) => `+ ${p}`);
     return lines.join(`
 `);
   }
@@ -7810,61 +7812,61 @@ function buildEffectiveDependencies(tasks) {
   return effectiveDeps;
 }
 export {
-  writeText,
-  writeJsonLockedSync,
-  writeJsonLocked,
-  writeJsonAtomic,
-  writeJson,
-  writeAtomic,
-  readText,
-  readJson,
-  patchJsonLockedSync,
-  patchJsonLocked,
-  normalizePath,
-  listFeatures,
-  getTasksPath,
-  getTaskStatusPath,
-  getTaskSpecPath,
-  getTaskReportPath,
-  getTaskPath,
-  getSubtasksPath,
-  getSubtaskStatusPath,
-  getSubtaskSpecPath,
-  getSubtaskReportPath,
-  getSubtaskPath,
-  getPlanPath,
-  getLockPath,
-  getHivePath,
-  getFeaturesPath,
-  getFeaturePath,
-  getFeatureJsonPath,
-  getFeatureData,
-  getContextPath,
-  getCommentsPath,
-  getApprovedPath,
-  findProjectRoot,
-  fileExists,
-  ensureDir,
-  detectContext,
-  deepMerge,
-  createWorktreeService,
-  computeRunnableAndBlocked,
-  buildEffectiveDependencies,
-  acquireLockSync,
-  acquireLock,
-  WorktreeService,
-  TaskService,
-  SubtaskService,
-  SessionService,
-  PlanService,
-  FeatureService,
-  DockerSandboxService,
-  DEFAULT_HIVE_CONFIG,
-  DEFAULT_AGENT_MODELS,
-  ContextService,
-  ConfigService,
-  CUSTOM_AGENT_RESERVED_NAMES,
-  CUSTOM_AGENT_BASES,
+  AgentsMdService,
   BUILT_IN_AGENT_NAMES,
-  AgentsMdService
+  CUSTOM_AGENT_BASES,
+  CUSTOM_AGENT_RESERVED_NAMES,
+  ConfigService,
+  ContextService,
+  DEFAULT_AGENT_MODELS,
+  DEFAULT_HIVE_CONFIG,
+  DockerSandboxService,
+  FeatureService,
+  PlanService,
+  SessionService,
+  SubtaskService,
+  TaskService,
+  WorktreeService,
+  acquireLock,
+  acquireLockSync,
+  buildEffectiveDependencies,
+  computeRunnableAndBlocked,
+  createWorktreeService,
+  deepMerge,
+  detectContext,
+  ensureDir,
+  fileExists,
+  findProjectRoot,
+  getApprovedPath,
+  getCommentsPath,
+  getContextPath,
+  getFeatureData,
+  getFeatureJsonPath,
+  getFeaturePath,
+  getFeaturesPath,
+  getHivePath,
+  getLockPath,
+  getPlanPath,
+  getSubtaskPath,
+  getSubtaskReportPath,
+  getSubtaskSpecPath,
+  getSubtaskStatusPath,
+  getSubtasksPath,
+  getTaskPath,
+  getTaskReportPath,
+  getTaskSpecPath,
+  getTaskStatusPath,
+  getTasksPath,
+  listFeatures,
+  normalizePath,
+  patchJsonLocked,
+  patchJsonLockedSync,
+  readJson,
+  readText,
+  writeAtomic,
+  writeJson,
+  writeJsonAtomic,
+  writeJsonLocked,
+  writeJsonLockedSync,
+  writeText
 };

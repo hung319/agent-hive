@@ -13,7 +13,7 @@ Add `@hung319/opencode-hive` to your `opencode.json`:
 
 ```json
 {
-  "plugin": ["@hung319/opencode-hive"]
+  "plugins": ["@hung319/opencode-hive"]
 }
 ```
 

@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from '@opencode-ai/plugin';
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import { fetchGitingest } from './gitingest.js';
 
 /**
@@ -11,7 +11,7 @@ import { fetchGitingest } from './gitingest.js';
  *
  * @see https://github.com/smartfrog/opencode-froggy
  */
-export const gitingestTool: ToolDefinition = tool({
+export const gitingestTool: ToolDefinition = tool("gitingest", {
   description: `Fetch a GitHub repository's full content via gitingest.com. Returns summary, directory tree, and file contents optimized for LLM analysis. Use when you need to understand an external repository's structure or code.
 
 **Parameters:**

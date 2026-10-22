@@ -31,16 +31,16 @@ describe('compaction-restoration', () => {
       expect(client.session.prompt).not.toHaveBeenCalled();
     });
 
-    it('should inject memories via session.prompt when memories exist', async () => {
+    it('should inject memories via session.synthetic when memories exist', async () => {
       const client = {
         session: {
-          prompt: vi.fn().mockResolvedValue(undefined),
+          synthetic: vi.fn().mockResolvedValue(undefined),
         },
         tui: {
           showToast: vi.fn().mockResolvedValue(undefined),
         },
       };
-      
+
       const mockMemories = [
         { type: 'decision', scope: 'auth', content: 'Use JWT with refresh tokens' },
         { type: 'learning', scope: 'api', content: 'Rate limiting at 100 req/min' },
@@ -50,15 +50,13 @@ describe('compaction-restoration', () => {
       await reInjectMemoriesAfterCompact('session-1', client, { enabled: true, maxMemories: 5 });
 
       expect(searchMemories).toHaveBeenCalledWith('', { limit: 5 });
-      expect(client.session.prompt).toHaveBeenCalledTimes(1);
-      
-      const callArg = client.session.prompt.mock.calls[0][0];
-      expect(callArg.path.id).toBe('session-1');
-      expect(callArg.body.noReply).toBe(true);
-      expect(callArg.body.parts[0].synthetic).toBe(true);
-      expect(callArg.body.parts[0].text).toContain('<persistent_memory>');
-      expect(callArg.body.parts[0].text).toContain('JWT');
-      expect(callArg.body.parts[0].text).toContain('Rate limiting');
+      expect(client.session.synthetic).toHaveBeenCalledTimes(1);
+
+      const callArg = client.session.synthetic.mock.calls[0][0];
+      expect(callArg.sessionID).toBe('session-1');
+      expect(callArg.text).toContain('<persistent_memory>');
+      expect(callArg.text).toContain('JWT');
+      expect(callArg.text).toContain('Rate limiting');
 
       // Toast should be shown
       expect(client.tui.showToast).toHaveBeenCalledTimes(1);

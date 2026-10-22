@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from '@opencode-ai/plugin';
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import type { SgNode } from '@ast-grep/napi';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -95,7 +95,7 @@ function findFiles(dir: string, extensions: string[], maxFiles: number = 500): s
 // Tool: ast_grep_find_code
 // ============================================================================
 
-export const astGrepFindCodeTool: ToolDefinition = tool({
+export const astGrepFindCodeTool: ToolDefinition = tool("ast_grep_find_code", {
   description: `Find code using AST pattern matching via ast-grep.
 
 **Parameters:**
@@ -206,7 +206,7 @@ function substituteRewrite(template: string, match: SgNode, source: string): str
   });
 }
 
-export const astGrepRewriteCodeTool: ToolDefinition = tool({
+export const astGrepRewriteCodeTool: ToolDefinition = tool("ast_grep_rewrite_code", {
   description: `Transform code using AST pattern matching and rewrite via ast-grep.
 
 **Parameters:**
@@ -306,7 +306,7 @@ ast_grep_rewrite_code({
 // Tool: ast_grep_dump_syntax_tree
 // ============================================================================
 
-export const astGrepDumpSyntaxTreeTool: ToolDefinition = tool({
+export const astGrepDumpSyntaxTreeTool: ToolDefinition = tool("ast_grep_dump_syntax_tree", {
   description: `Dump the syntax tree of a file using ast-grep.
 
 **Parameters:**
@@ -366,7 +366,7 @@ ast_grep_dump_syntax_tree({ path: "src/index.ts", maxDepth: 5 })
 // Tool: ast_grep_scan_code
 // ============================================================================
 
-export const astGrepScanCodeTool: ToolDefinition = tool({
+export const astGrepScanCodeTool: ToolDefinition = tool("ast_grep_scan_code", {
   description: `Scan code for common issues using ast-grep pattern matching.
 
 Checks for:
@@ -466,7 +466,7 @@ ast_grep_scan_code({ path: "./src" })
 // Tool: ast_grep_analyze_imports
 // ============================================================================
 
-export const astGrepAnalyzeImportsTool: ToolDefinition = tool({
+export const astGrepAnalyzeImportsTool: ToolDefinition = tool("ast_grep_analyze_imports", {
   description: `Analyze import/export patterns in a file or directory using ast-grep.
 
 **Parameters:**

@@ -39,13 +39,13 @@ describe('Hive (Hybrid) prompt', () => {
       expect(QUEEN_BEE_PROMPT).toContain('Internal codebase exploration');
     });
 
-    it('includes task() guidance for research', () => {
-      expect(QUEEN_BEE_PROMPT).toContain('task(');
+    it('includes subagent() guidance for research', () => {
+      expect(QUEEN_BEE_PROMPT).toContain('subagent(');
       expect(QUEEN_BEE_PROMPT).toContain('scout-researcher');
     });
 
     it('requires hive_status() before any resume attempt', () => {
-      expect(QUEEN_BEE_PROMPT).toContain('After `task()` returns, immediately call `hive_status()`');
+      expect(QUEEN_BEE_PROMPT).toContain('After `subagent()` returns, immediately call `hive_status()`');
       expect(QUEEN_BEE_PROMPT).toContain('before any resume attempt');
     });
 
@@ -67,7 +67,7 @@ describe('Hive (Hybrid) prompt', () => {
     it('documents hygienic reviewer routing fallback and custom reviewer selection', () => {
       expect(QUEEN_BEE_PROMPT).toContain('default to built-in `hygienic-reviewer`');
       expect(QUEEN_BEE_PROMPT).toContain('its description in `Configured Custom Subagents` is a better match');
-      expect(QUEEN_BEE_PROMPT).toContain('task({ subagent_type: "<chosen-reviewer>"');
+      expect(QUEEN_BEE_PROMPT).toContain('subagent({ subagent_type: "<chosen-reviewer>"');
     });
   });
 
@@ -107,9 +107,9 @@ describe('Architect (Planner) prompt', () => {
       expect(ARCHITECT_BEE_PROMPT).toContain('read-only research delegation to Scout is allowed');
     });
 
-    it('permits research and review delegation via task()', () => {
-      expect(ARCHITECT_BEE_PROMPT).toContain('You may use task() to delegate read-only research to Scout and plan review to Hygienic.');
-      expect(ARCHITECT_BEE_PROMPT).toContain('Never use task() to delegate implementation or coding work.');
+    it('permits research and review delegation via subagent()', () => {
+      expect(ARCHITECT_BEE_PROMPT).toContain('You may use subagent() to delegate read-only research to Scout and plan review to Hygienic.');
+      expect(ARCHITECT_BEE_PROMPT).toContain('Never use subagent() to delegate implementation or coding work.');
     });
 
     it('does NOT contain the blanket prohibition "Delegate work or spawn workers"', () => {
@@ -164,7 +164,7 @@ describe('Swarm (Orchestrator) prompt', () => {
     });
 
     it('requires hive_status() before any resume attempt', () => {
-      expect(SWARM_BEE_PROMPT).toContain('After `task()` returns, call `hive_status()` immediately');
+      expect(SWARM_BEE_PROMPT).toContain('After `subagent()` returns, call `hive_status()` immediately');
       expect(SWARM_BEE_PROMPT).toContain('before any resume attempt');
     });
 
@@ -183,14 +183,14 @@ describe('Swarm (Orchestrator) prompt', () => {
       expect(SWARM_BEE_PROMPT).toContain('hive_worktree_start({ feature, task })');
     });
 
-    it('includes task() guidance for research fan-out', () => {
-      expect(SWARM_BEE_PROMPT).toContain('task() for research fan-out');
+    it('includes subagent() guidance for research fan-out', () => {
+      expect(SWARM_BEE_PROMPT).toContain('subagent() for research fan-out');
     });
 
     it('documents hygienic reviewer routing fallback and custom reviewer selection', () => {
       expect(SWARM_BEE_PROMPT).toContain('default to built-in `hygienic-reviewer`');
       expect(SWARM_BEE_PROMPT).toContain('its description in `Configured Custom Subagents` is a better match');
-      expect(SWARM_BEE_PROMPT).toContain('task({ subagent_type: "<chosen-reviewer>"');
+      expect(SWARM_BEE_PROMPT).toContain('subagent({ subagent_type: "<chosen-reviewer>"');
     });
   });
 

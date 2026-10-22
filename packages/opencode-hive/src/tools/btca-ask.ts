@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition, type ToolContext } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition, type ToolContext } from '../compat/v2-tool.js';
 
 /**
  * btca_ask tool
@@ -94,7 +94,7 @@ Note: This tool requires the btca npm package and Bluetooth hardware.`;
   }
 }
 
-export const btcaAskTool: ToolDefinition = tool({
+export const btcaAskTool: ToolDefinition = tool("btca_ask", {
   description:
     "Control Bluetooth Classic Audio devices. Requires btca-cli npm package. Use for playing/pausing music, controlling volume, and managing Bluetooth audio connections.",
   args: {

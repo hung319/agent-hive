@@ -1,22 +1,35 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "fs";
 import * as path from "path";
-import { createOpencodeClient } from "@opencode-ai/sdk";
-import plugin from "../index";
-
-const OPENCODE_CLIENT = createOpencodeClient({ baseUrl: "http://localhost:1" });
+import { runV2PluginSetup, type V2Harness } from "../__tests__/v2-harness.js";
 
 const TEST_ROOT_BASE = "/tmp/hive-agent-mode-test";
 
-function createProject(worktree: string) {
-  return {
-    id: "test",
-    worktree,
-    time: { created: Date.now() },
+/**
+ * V2 port: the plugin no longer mutates an `opencodeConfig.agent` map through
+ * a `hooks.config` hook — it writes `.opencode/agents/<id>.md` definitions.
+ * These helpers rebuild the V1 view: presence from the md file, prompt from
+ * the md body, mode/variant/model/temperature from the frontmatter.
+ */
+function agentEntry(harness: V2Harness, id: string): Record<string, unknown> | undefined {
+  const file = path.join(harness.projectDir, ".opencode", "agents", `${id}.md`);
+  if (!fs.existsSync(file)) return undefined;
+  const raw = fs.readFileSync(file, "utf-8");
+  const frontmatter = raw.split("---")[1] ?? "";
+  const field = (key: string): string | undefined => {
+    const m = frontmatter.match(new RegExp(`^\\s*${key}:\\s*"?([^"\\n]*)"?,?\\s*$`, "m"));
+    return m ? (m[1] === "" ? undefined : m[1]) : undefined;
   };
-}
+  return {
+    mode: field("mode") === "subagent" ? "subagent" : undefined,
+    prompt: raw.split("---").slice(2).join("---"),
+    model: field("model"),
+    variant: field("variant"),
+    temperature: field("temperature") ? Number(field("temperature")) : undefined,
+  };
+};
 
-describe("agentMode gating", () => {
+describe("agentMode gating (V2 bootstrap)", () => {
   let testRoot: string;
   let originalHome: string | undefined;
   let originalHiveDisable: string | undefined;
@@ -53,25 +66,15 @@ describe("agentMode gating", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
+    const harness = await runV2PluginSetup({ directory: testRoot });
 
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
-
-    expect(opencodeConfig.agent["zetta"]).toBeDefined();
-    expect(opencodeConfig.agent["architect-planner"]).toBeUndefined();
-    expect(opencodeConfig.agent["swarm-orchestrator"]).toBeUndefined();
-    expect(opencodeConfig.agent["scout-researcher"]).toBeDefined();
-    expect(opencodeConfig.agent["forager-worker"]).toBeDefined();
-    expect(opencodeConfig.agent["hygienic-reviewer"]).toBeDefined();
-    expect(opencodeConfig.default_agent).toBe("zetta");
+    expect(agentEntry(harness, "zetta")).toBeDefined();
+    expect(agentEntry(harness, "architect-planner")).toBeUndefined();
+    expect(agentEntry(harness, "swarm-orchestrator")).toBeUndefined();
+    expect(agentEntry(harness, "scout-researcher")).toBeDefined();
+    expect(agentEntry(harness, "forager-worker")).toBeDefined();
+    expect(agentEntry(harness, "hygienic-reviewer")).toBeDefined();
+    expect(harness.agentDefaults).toContain("zetta");
   });
 
   it("registers dedicated agents in dedicated mode", async () => {
@@ -84,25 +87,15 @@ describe("agentMode gating", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
+    const harness = await runV2PluginSetup({ directory: testRoot });
 
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
-
-    expect(opencodeConfig.agent["zetta"]).toBeDefined();
-    expect(opencodeConfig.agent["scout-researcher"]).toBeDefined();
-    expect(opencodeConfig.agent["forager-worker"]).toBeDefined();
-    expect(opencodeConfig.agent["hygienic-reviewer"]).toBeDefined();
-    expect(opencodeConfig.agent["codebase-locator"]).toBeDefined();
-    expect(opencodeConfig.agent["codebase-analyzer"]).toBeDefined();
-    expect(opencodeConfig.default_agent).toBe("zetta");
+    expect(agentEntry(harness, "zetta")).toBeDefined();
+    expect(agentEntry(harness, "scout-researcher")).toBeDefined();
+    expect(agentEntry(harness, "forager-worker")).toBeDefined();
+    expect(agentEntry(harness, "hygienic-reviewer")).toBeDefined();
+    expect(agentEntry(harness, "codebase-locator")).toBeDefined();
+    expect(agentEntry(harness, "codebase-analyzer")).toBeDefined();
+    expect(harness.agentDefaults).toContain("zetta");
   });
 
   it("injects custom-subagent appendix into dedicated-mode primary prompts and registers custom agents", async () => {
@@ -127,28 +120,18 @@ describe("agentMode gating", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
+    const harness = await runV2PluginSetup({ directory: testRoot });
 
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    expect(agentEntry(harness, "forager-ui")).toBeDefined();
+    expect(agentEntry(harness, "reviewer-security")).toBeDefined();
 
-    expect(opencodeConfig.agent["forager-ui"]).toBeDefined();
-    expect(opencodeConfig.agent["reviewer-security"]).toBeDefined();
-
-    const zettaPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
+    const zettaPrompt = agentEntry(harness, "zetta")!.prompt as string;
     expect(zettaPrompt).toContain("## Configured Custom Subagents");
     expect(zettaPrompt).toContain("forager-ui");
     expect(zettaPrompt).toContain("reviewer-security");
   });
 
-  it("demotes built-in agents (build, plan) to subagent mode even when no agent config exists", async () => {
+  it("keeps built-in agents (build, plan) untouched and registers zetta as primary default", async () => {
     const configPath = path.join(testRoot, ".config", "opencode", "agent_hive.json");
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     fs.writeFileSync(
@@ -158,30 +141,19 @@ describe("agentMode gating", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
+    const harness = await runV2PluginSetup({ directory: testRoot });
 
-    const hooks = await plugin(ctx);
-    // Test with NO existing agent config (empty object means no agent section)
-    const opencodeConfig: any = { agent: undefined };
-    await hooks.config!(opencodeConfig);
+    // V2 decision: built-in agents are NO LONGER demoted to subagent mode.
+    // Demoting `build`/`plan` breaks `opencode run` (AgentNotFoundError, exit=1):
+    // the plugin only sets the primary default via agentEditor.default("zetta").
+    const agentFile = (id: string) =>
+      fs.existsSync(path.join(harness.projectDir, ".opencode", "agents", `${id}.md`));
+    expect(agentFile("build")).toBe(false);
+    expect(agentFile("plan")).toBe(false);
 
-    // Verify built-in agents are demoted to subagent mode
-    expect(opencodeConfig.agent["build"]).toBeDefined();
-    expect((opencodeConfig.agent["build"] as any).mode).toBe("subagent");
-    expect(opencodeConfig.agent["plan"]).toBeDefined();
-    expect((opencodeConfig.agent["plan"] as any).mode).toBe("subagent");
-    
-    // Verify zetta is the default agent
-    expect(opencodeConfig.default_agent).toBe("zetta");
-    
-    // Verify zetta is registered as primary (no mode = primary)
-    expect(opencodeConfig.agent["zetta"]).toBeDefined();
-    expect((opencodeConfig.agent["zetta"] as any).mode).toBeUndefined();
+    // zetta is the primary default (no mode field → primary)
+    expect(agentEntry(harness, "zetta")).toBeDefined();
+    expect(agentEntry(harness, "zetta")!.mode).toBeUndefined();
+    expect(harness.agentDefaults).toContain("zetta");
   });
 });

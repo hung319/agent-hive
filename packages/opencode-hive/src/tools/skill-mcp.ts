@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import type { SkillDefinition } from '../skills/types.js';
 import { loadBuiltinSkill } from '../skills/builtin.js';
 import { loadFileSkill } from '../skills/file-loader.js';
@@ -23,7 +23,7 @@ export function getSkillMcpConfig(skill: SkillDefinition): Record<string, McpCon
  * 
  * Invokes MCP server operations from skill-embedded MCPs.
  */
-export const skillMcpTool: ToolDefinition = tool({
+export const skillMcpTool: ToolDefinition = tool("skill_mcp", {
   description: 'Invoke MCP server operations from skill-embedded MCPs. ' +
     'Skills can bring their own MCP servers that spin up on-demand.',
   args: {
@@ -92,7 +92,7 @@ export const skillMcpTool: ToolDefinition = tool({
 /**
  * List skill MCPs Tool
  */
-export const listSkillMcpsTool: ToolDefinition = tool({
+export const listSkillMcpsTool: ToolDefinition = tool("list_skill_mcps", {
   description: 'List all available skill-embedded MCP servers.',
   args: {
     skill: tool.schema.string().optional().describe('Filter by skill name'),

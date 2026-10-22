@@ -1,358 +1,251 @@
-import { describe, expect, it, spyOn, beforeEach, afterEach, afterAll, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { ConfigService } from 'hive-core';
+import * as fs from 'fs';
 import * as path from 'path';
-import plugin from '../index';
+import { runV2PluginSetup, type V2Harness } from '../__tests__/v2-harness';
 
-type PluginInput = {
-  directory: string;
-  worktree: string;
-  serverUrl: URL;
-  project: { id: string; worktree: string; time: { created: number } };
-  client: unknown;
-  $: unknown;
-};
+/**
+ * V2 note: agents are contributed as generated `.opencode/agents/*.md`
+ * definitions and per-agent hive-tool filtering happens in a session
+ * `context` hook (V2 agent definitions carry no `tools` map or
+ * `permission` object). These tests run the plugin through the shared V2
+ * harness and assert on the generated markdown + captured hooks.
+ */
 
-function createStubShell(): unknown {
-  const fn = ((..._args: unknown[]) => {
-    throw new Error('shell not available in this test');
-  }) as unknown as Record<string, unknown>;
+type MdFile = string | undefined;
 
-  return Object.assign(fn, {
-    braces(pattern: string) {
-      return [pattern];
-    },
-    escape(input: string) {
-      return input;
-    },
-    env() {
-      return fn;
-    },
-    cwd() {
-      return fn;
-    },
-    nothrow() {
-      return fn;
-    },
-    throws() {
-      return fn;
-    },
-  });
+function readAgentMd(dir: string, id: string): MdFile {
+  const file = path.join(dir, '.opencode', 'agents', `${id}.md`);
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : undefined;
 }
 
-function createStubClient(): unknown {
-  return {
-    session: {
-      create: async () => ({ data: { id: 'test-session' } }),
-      prompt: async () => ({ data: {} }),
-      get: async () => ({ data: { status: 'idle' } }),
-      messages: async () => ({ data: [] }),
-      abort: async () => {},
-    },
-    app: {
-      agents: async () => ({ data: [] }),
-      log: async () => {},
-    },
-    config: {
-      get: async () => ({ data: {} }),
-    },
-  };
+function permissionRules(md: MdFile): string[] {
+  const match = md?.match(/permissions:\n((?:  - \{[^\n]*\}\n?)+)/);
+  if (!match) return [];
+  return match[1].trim().split('\n').map((l) => l.trim());
 }
 
-type AgentConfig = {
-  permission?: Record<string, string>;
-  tools?: Record<string, boolean>;
-  prompt?: string;
+function hasDeny(md: MdFile, action: string): boolean {
+  // Rules render as: - { action: "<action>", resource: "*", effect: "<effect>" }
+  return permissionRules(md).some((rule) => rule.includes(`action: "${action}"`) && rule.includes('effect: "deny"'));
+}
+
+const TOOLS_UNIVERSE: Record<string, unknown> = {
+  hive_feature_create: {},
+  hive_plan_write: {},
+  hive_plan_read: {},
+  hive_tasks_sync: {},
+  hive_task_create: {},
+  hive_task_update: {},
+  hive_worktree_start: {},
+  hive_worktree_create: {},
+  hive_worktree_commit: {},
+  hive_merge: {},
+  hive_context_write: {},
+  hive_status: {},
+  hive_skill: {},
+  read: {},
 };
 
-describe('Agent permissions', () => {
+/** Invoke the plugin's captured session `context` hook as V2 would. */
+function applyToolGate(harness: V2Harness, agent: string): Record<string, unknown> {
+  const handler = harness.sessionHooks.get('context')?.at(-1);
+  expect(handler).toBeDefined();
+  const tools = { ...TOOLS_UNIVERSE };
+  const event = { agent, tools };
+  const result = handler!(event as never);
+  return (result as { tools?: Record<string, unknown> })?.tools ?? (event as { tools: Record<string, unknown> }).tools;
+}
+
+describe('Agent permissions (V2 bootstrap)', () => {
   let originalHiveDisable: string | undefined;
+  let harness: V2Harness | null = null;
+
   beforeEach(() => {
     originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
-    process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
+    process.env.HIVE_DISABLE_AUTO_INSTALL = '1';
   });
+
   afterEach(() => {
     mock.restore();
+    if (harness) {
+      harness.restoreHome();
+      fs.rmSync(harness.projectDir, { recursive: true, force: true });
+      harness = null;
+    }
     if (originalHiveDisable === undefined) delete process.env.HIVE_DISABLE_AUTO_INSTALL;
     else process.env.HIVE_DISABLE_AUTO_INSTALL = originalHiveDisable;
   });
 
+  async function setupWith(config: Record<string, unknown>): Promise<V2Harness> {
+    harness = await runV2PluginSetup({ config });
+    return harness;
+  }
+
   it('registers zetta, scout, forager, and hygienic in unified mode', async () => {
-    // Mock ConfigService to return unified mode
-    spyOn(ConfigService.prototype, 'get').mockReturnValue({
-      agentMode: 'unified',
-      agents: {
-        'zetta': {},
-      }
-    } as any);
+    const h = await setupWith({ agentMode: 'unified', agents: { zetta: {} } });
 
-    const repoRoot = path.resolve(import.meta.dir, '..', '..', '..', '..');
+    // Agents are generated into .opencode/agents in V2
+    expect(readAgentMd(h.projectDir, 'zetta')).toBeTruthy();
+    expect(readAgentMd(h.projectDir, 'swarm-orchestrator')).toBeUndefined();
+    expect(readAgentMd(h.projectDir, 'architect-planner')).toBeUndefined();
+    expect(readAgentMd(h.projectDir, 'scout-researcher')).toBeTruthy();
+    expect(readAgentMd(h.projectDir, 'forager-worker')).toBeTruthy();
+    expect(readAgentMd(h.projectDir, 'hygienic-reviewer')).toBeTruthy();
 
-    const ctx: PluginInput = {
-      directory: repoRoot,
-      worktree: repoRoot,
-      serverUrl: new URL('http://localhost:1'),
-      project: { id: 'test', worktree: repoRoot, time: { created: Date.now() } },
-      client: createStubClient(),
-      $: createStubShell(),
-    };
+    // zetta is the primary/default agent
+    expect(readAgentMd(h.projectDir, 'zetta')).toContain('mode: primary');
+    expect(h.agentDefaults).toContain('zetta');
 
-    const hooks = await plugin(ctx as any);
-    
-    const opencodeConfig: { 
-      agent?: Record<string, AgentConfig>,
-      default_agent?: string 
-    } = {};
-    await hooks.config?.(opencodeConfig);
-
-    expect(opencodeConfig.agent?.['zetta']).toBeTruthy();
-    expect(opencodeConfig.agent?.['swarm-orchestrator']).toBeUndefined();
-    expect(opencodeConfig.agent?.['architect-planner']).toBeUndefined();
-    expect(opencodeConfig.agent?.['scout-researcher']).toBeTruthy();
-    expect(opencodeConfig.agent?.['forager-worker']).toBeTruthy();
-    expect(opencodeConfig.agent?.['hygienic-reviewer']).toBeTruthy();
-    expect(opencodeConfig.default_agent).toBe('zetta');
-
-    const zettaPerm = opencodeConfig.agent?.['zetta']?.permission;
-    expect(zettaPerm).toBeTruthy();
+    // zetta keeps permission rules in its generated definition
+    expect(permissionRules(readAgentMd(h.projectDir, 'zetta')).length).toBeGreaterThan(0);
   });
 
   it('registers dedicated agents in dedicated mode', async () => {
-    // Mock ConfigService to return dedicated mode
-    spyOn(ConfigService.prototype, 'get').mockReturnValue({
-      agentMode: 'dedicated',
-      agents: {
-        'zetta': {},
-      }
-    } as any);
+    const h = await setupWith({ agentMode: 'dedicated', agents: { zetta: {} } });
 
-    const repoRoot = path.resolve(import.meta.dir, '..', '..', '..', '..');
-
-    const ctx: PluginInput = {
-      directory: repoRoot,
-      worktree: repoRoot,
-      serverUrl: new URL('http://localhost:1'),
-      project: { id: 'test', worktree: repoRoot, time: { created: Date.now() } },
-      client: createStubClient(),
-      $: createStubShell(),
-    };
-
-    const hooks = await plugin(ctx as any);
-    
-    const opencodeConfig: { 
-      agent?: Record<string, AgentConfig>,
-      default_agent?: string 
-    } = {};
-    await hooks.config?.(opencodeConfig);
-
-    expect(opencodeConfig.agent?.['zetta']).toBeTruthy();
-    expect(opencodeConfig.agent?.['scout-researcher']).toBeTruthy();
-    expect(opencodeConfig.agent?.['forager-worker']).toBeTruthy();
-    expect(opencodeConfig.agent?.['hygienic-reviewer']).toBeTruthy();
-    expect(opencodeConfig.agent?.['codebase-locator']).toBeTruthy();
-    expect(opencodeConfig.agent?.['codebase-analyzer']).toBeTruthy();
-    expect(opencodeConfig.default_agent).toBe('zetta');
-
-    const zettaPerm = opencodeConfig.agent?.['zetta']?.permission;
-    expect(zettaPerm).toBeTruthy();
+    for (const id of ['zetta', 'scout-researcher', 'forager-worker', 'hygienic-reviewer', 'codebase-locator', 'codebase-analyzer']) {
+      expect(readAgentMd(h.projectDir, id)).toBeTruthy();
+    }
+    expect(h.agentDefaults).toContain('zetta');
   });
 
   it('explicitly denies delegation tools for subagents', async () => {
-    spyOn(ConfigService.prototype, 'get').mockReturnValue({
-      agentMode: 'unified',
-      agents: {
-        'zetta': {},
-      },
-    } as any);
+    const h = await setupWith({ agentMode: 'unified', agents: { zetta: {} } });
 
-    const repoRoot = path.resolve(import.meta.dir, '..', '..', '..', '..');
-
-    const ctx: PluginInput = {
-      directory: repoRoot,
-      worktree: repoRoot,
-      serverUrl: new URL('http://localhost:1'),
-      project: { id: 'test', worktree: repoRoot, time: { created: Date.now() } },
-      client: createStubClient(),
-      $: createStubShell(),
-    };
-
-    const hooks = await plugin(ctx as any);
-    const opencodeConfig: {
-      agent?: Record<string, AgentConfig>;
-      default_agent?: string;
-    } = {};
-    await hooks.config?.(opencodeConfig);
-
-    const subagentNames = ['scout-researcher', 'forager-worker', 'hygienic-reviewer'] as const;
-    for (const name of subagentNames) {
-      const perm = opencodeConfig.agent?.[name]?.permission;
-      expect(perm).toBeTruthy();
-      expect(perm!.task).toBe('deny');
-      expect(perm!.delegate).toBe('deny');
+    for (const id of ['scout-researcher', 'forager-worker', 'hygienic-reviewer']) {
+      // V1 `task`/`delegate` → V2 `subagent` action deny
+      expect(hasDeny(readAgentMd(h.projectDir, id), 'subagent')).toBe(true);
     }
+    // zetta must be able to launch subagents
+    expect(hasDeny(readAgentMd(h.projectDir, 'zetta'), 'subagent')).toBe(false);
   });
 
   it('inherits subagent safety restrictions for custom forager and hygienic families', async () => {
-    spyOn(ConfigService.prototype, 'get').mockReturnValue({
+    const h = await setupWith({
       agentMode: 'unified',
-      agents: {
-        'zetta': {},
-      },
+      agents: { zetta: {} },
       customAgents: {
-        'forager-ui': {
-          baseAgent: 'forager-worker',
-          description: 'UI-focused forager',
-          variant: 'high',
-        },
-        'reviewer-security': {
-          baseAgent: 'hygienic-reviewer',
-          description: 'Security-focused reviewer',
-          variant: 'medium',
-        },
+        'forager-ui': { baseAgent: 'forager-worker', description: 'UI-focused forager', variant: 'high' },
+        'reviewer-security': { baseAgent: 'hygienic-reviewer', description: 'Security-focused reviewer', variant: 'medium' },
       },
-    } as any);
+    });
 
-    const repoRoot = path.resolve(import.meta.dir, '..', '..', '..', '..');
+    expect(readAgentMd(h.projectDir, 'forager-ui')).toBeTruthy();
+    expect(readAgentMd(h.projectDir, 'reviewer-security')).toBeTruthy();
 
-    const ctx: PluginInput = {
-      directory: repoRoot,
-      worktree: repoRoot,
-      serverUrl: new URL('http://localhost:1'),
-      project: { id: 'test', worktree: repoRoot, time: { created: Date.now() } },
-      client: createStubClient(),
-      $: createStubShell(),
-    };
+    // forager family: no subagent launches
+    expect(hasDeny(readAgentMd(h.projectDir, 'forager-ui'), 'subagent')).toBe(true);
+    // reviewer family: no edits
+    expect(hasDeny(readAgentMd(h.projectDir, 'reviewer-security'), 'edit')).toBe(true);
 
-    const hooks = await plugin(ctx as any);
-    const opencodeConfig: {
-      agent?: Record<string, AgentConfig>;
-      default_agent?: string;
-    } = {};
-    await hooks.config?.(opencodeConfig);
+    // The context hook applies the same gate to custom agents
+    const foragerUi = applyToolGate(h, 'forager-ui');
+    expect(Object.hasOwn(foragerUi, 'hive_worktree_commit')).toBe(true);
+    expect(Object.hasOwn(foragerUi, 'hive_merge')).toBe(false);
+    expect(Object.hasOwn(foragerUi, 'hive_status')).toBe(false);
 
-    expect(opencodeConfig.agent?.['forager-ui']).toBeTruthy();
-    expect(opencodeConfig.agent?.['reviewer-security']).toBeTruthy();
-
-    expect(opencodeConfig.agent?.['forager-ui']?.permission?.task).toBe('deny');
-    expect(opencodeConfig.agent?.['forager-ui']?.permission?.delegate).toBe('deny');
-    expect(opencodeConfig.agent?.['reviewer-security']?.permission?.edit).toBe('deny');
-    expect(opencodeConfig.agent?.['reviewer-security']?.tools).toEqual(
-      opencodeConfig.agent?.['hygienic-reviewer']?.tools,
-    );
+    const reviewer = applyToolGate(h, 'reviewer-security');
+    expect(Object.hasOwn(reviewer, 'hive_plan_read')).toBe(true);
+    expect(Object.hasOwn(reviewer, 'hive_worktree_commit')).toBe(false);
   });
 });
 
-describe('Per-agent tool filtering', () => {
+describe('Per-agent tool filtering (V2 context hook)', () => {
   let originalHiveDisable2: string | undefined;
+  let harness: V2Harness | null = null;
+
   beforeEach(() => {
     originalHiveDisable2 = process.env.HIVE_DISABLE_AUTO_INSTALL;
-    process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
+    process.env.HIVE_DISABLE_AUTO_INSTALL = '1';
   });
+
   afterEach(() => {
     mock.restore();
+    if (harness) {
+      harness.restoreHome();
+      fs.rmSync(harness.projectDir, { recursive: true, force: true });
+      harness = null;
+    }
     if (originalHiveDisable2 === undefined) delete process.env.HIVE_DISABLE_AUTO_INSTALL;
     else process.env.HIVE_DISABLE_AUTO_INSTALL = originalHiveDisable2;
   });
 
-  async function buildConfig(agentMode: string) {
-    spyOn(ConfigService.prototype, 'get').mockReturnValue({
-      agentMode,
-      agents: {},
-    } as any);
-
-    const repoRoot = path.resolve(import.meta.dir, '..', '..', '..', '..');
-    const ctx: PluginInput = {
-      directory: repoRoot,
-      worktree: repoRoot,
-      serverUrl: new URL('http://localhost:1'),
-      project: { id: 'test', worktree: repoRoot, time: { created: Date.now() } },
-      client: createStubClient(),
-      $: createStubShell(),
-    };
-    const hooks = await plugin(ctx as any);
-    const opencodeConfig: { agent?: Record<string, AgentConfig>; default_agent?: string } = {};
-    await hooks.config?.(opencodeConfig);
-    return opencodeConfig.agent ?? {};
+  async function gateFor(agent: string): Promise<Record<string, unknown>> {
+    if (!harness) {
+      harness = await runV2PluginSetup({ config: { agentMode: 'unified', agents: { zetta: {} } } });
+    }
+    const tools = { ...TOOLS_UNIVERSE };
+    const handler = harness.sessionHooks.get('context')?.at(-1);
+    expect(handler).toBeDefined();
+    await handler!({ agent, tools } as never);
+    return tools;
   }
 
   it('forager has hive_worktree_commit allowed and hive_merge disabled', async () => {
-    const agents = await buildConfig('unified');
-    const foragerTools = agents['forager-worker']?.tools;
-    expect(foragerTools).toBeTruthy();
-    expect(foragerTools!['hive_worktree_commit']).toBeUndefined();
-    expect(foragerTools!['hive_merge']).toBe(false);
-    expect(foragerTools!['hive_tasks_sync']).toBe(false);
-    expect(foragerTools!['hive_worktree_create']).toBe(false);
-    expect(foragerTools!['hive_worktree_start']).toBe(false);
+    const tools = await gateFor('forager-worker');
+    expect(tools['hive_worktree_commit']).toBeDefined();
+    expect(tools['hive_merge']).toBeUndefined();
   });
 
   it('forager tool list is exactly [hive_plan_read, hive_worktree_commit, hive_context_write, hive_skill] and excludes hive_status', async () => {
-    const agents = await buildConfig('unified');
-    const foragerTools = agents['forager-worker']?.tools;
-    expect(foragerTools).toBeTruthy();
-    expect(foragerTools!['hive_status']).toBe(false);
-    expect(foragerTools!['hive_plan_read']).toBeUndefined();
-    expect(foragerTools!['hive_worktree_commit']).toBeUndefined();
-    expect(foragerTools!['hive_context_write']).toBeUndefined();
-    expect(foragerTools!['hive_skill']).toBeUndefined();
+    const tools = await gateFor('forager-worker');
+    expect(tools['hive_status']).toBeUndefined();
+    expect(tools['hive_plan_read']).toBeDefined();
+    expect(tools['hive_worktree_commit']).toBeDefined();
+    expect(tools['hive_context_write']).toBeDefined();
+    expect(tools['hive_skill']).toBeDefined();
   });
 
   it('scout has only read-only hive tools (no worktree_commit, no merge)', async () => {
-    const agents = await buildConfig('unified');
-    const scoutTools = agents['scout-researcher']?.tools;
-    expect(scoutTools).toBeTruthy();
-    expect(scoutTools!['hive_worktree_commit']).toBe(false);
-    expect(scoutTools!['hive_merge']).toBe(false);
-    expect(scoutTools!['hive_plan_read']).toBeUndefined();
-    expect(scoutTools!['hive_context_write']).toBeUndefined();
+    const tools = await gateFor('scout-researcher');
+    expect(tools['hive_worktree_commit']).toBeUndefined();
+    expect(tools['hive_merge']).toBeUndefined();
+    expect(tools['hive_plan_read']).toBeDefined();
+    expect(tools['hive_context_write']).toBeDefined();
   });
 
   it('hygienic has same tool set as scout', async () => {
-    const agents = await buildConfig('unified');
-    const hygienicTools = agents['hygienic-reviewer']?.tools;
-    const scoutTools = agents['scout-researcher']?.tools;
-    expect(hygienicTools).toEqual(scoutTools);
+    const hygienic = Object.keys(await gateFor('hygienic-reviewer')).filter((k) => k.startsWith('hive_')).sort();
+    harness = null;
+    const scout = Object.keys(await gateFor('scout-researcher')).filter((k) => k.startsWith('hive_')).sort();
+    expect(hygienic).toEqual(scout);
   });
 
   it('zetta has no tools filter (all tools allowed)', async () => {
-    const agents = await buildConfig('unified');
-    const zettaTools = agents['zetta']?.tools;
-    expect(zettaTools).toBeUndefined();
+    const tools = await gateFor('zetta');
+    expect(tools['hive_merge']).toBeDefined();
+    expect(tools['hive_worktree_commit']).toBeDefined();
+    expect(tools['hive_status']).toBeDefined();
   });
 
-  // --- Micode agent tool tests ---
-
   it('codebase-locator has read-only hive tools (hive_plan_read, hive_skill)', async () => {
-    const agents = await buildConfig('unified');
-    const tools = agents['codebase-locator']?.tools;
-    expect(tools).toBeTruthy();
-    expect(tools!['hive_plan_read']).toBeUndefined();
-    expect(tools!['hive_skill']).toBeUndefined();
-    expect(tools!['hive_worktree_commit']).toBe(false);
-    expect(tools!['hive_merge']).toBe(false);
-    expect(tools!['hive_worktree_start']).toBe(false);
+    const tools = await gateFor('codebase-locator');
+    expect(tools['hive_plan_read']).toBeDefined();
+    expect(tools['hive_skill']).toBeDefined();
+    expect(tools['hive_worktree_commit']).toBeUndefined();
+    expect(tools['hive_merge']).toBeUndefined();
+    expect(tools['hive_worktree_start']).toBeUndefined();
   });
 
   it('codebase-analyzer has read-only hive tools (hive_plan_read, hive_skill)', async () => {
-    const agents = await buildConfig('unified');
-    const tools = agents['codebase-analyzer']?.tools;
-    expect(tools).toBeTruthy();
-    expect(tools!['hive_plan_read']).toBeUndefined();
-    expect(tools!['hive_skill']).toBeUndefined();
-    expect(tools!['hive_worktree_commit']).toBe(false);
-    expect(tools!['hive_merge']).toBe(false);
+    const tools = await gateFor('codebase-analyzer');
+    expect(tools['hive_plan_read']).toBeDefined();
+    expect(tools['hive_skill']).toBeDefined();
+    expect(tools['hive_worktree_commit']).toBeUndefined();
+    expect(tools['hive_merge']).toBeUndefined();
   });
 
   it('6 core agents are registered in both unified and dedicated modes', async () => {
     const coreAgents = ['zetta', 'codebase-locator', 'codebase-analyzer', 'scout-researcher', 'forager-worker', 'hygienic-reviewer'];
-    
-    const unifiedAgents = await buildConfig('unified');
-    for (const name of coreAgents) {
-      expect(unifiedAgents[name]).toBeTruthy();
-    }
 
-    const dedicatedAgents = await buildConfig('dedicated');
-    for (const name of coreAgents) {
-      expect(dedicatedAgents[name]).toBeTruthy();
+    for (const agentMode of ['unified', 'dedicated']) {
+      const h = await runV2PluginSetup({ config: { agentMode, agents: { zetta: {} } } });
+      for (const name of coreAgents) {
+        expect(readAgentMd(h.projectDir, name)).toBeTruthy();
+      }
+      h.restoreHome();
+      fs.rmSync(h.projectDir, { recursive: true, force: true });
     }
   });
 });

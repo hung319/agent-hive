@@ -1,28 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'bun:test';
 import { OpenCodeProviderService } from '../opencode-provider.js';
 
+/**
+ * V2 note: the provider runs transient LLM calls through
+ * `client.session.generate({ sessionID, prompt }) → { text }`, so every test
+ * passes a `sessionID` and mocks `session.generate` instead of the V1
+ * `session.prompt`.
+ */
 describe('OpenCodeProviderService', () => {
   let mockClient: any;
+  const SESSION = 'session-1';
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockClient = {
       session: {
-        prompt: vi.fn(),
+        generate: vi.fn(),
       },
     };
   });
 
   describe('generateStructured', () => {
-    it('should parse JSON response from session.prompt', async () => {
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{ text: '{"summary": "test", "count": 42}' }],
-        },
+    it('should parse JSON response from session.generate', async () => {
+      mockClient.session.generate.mockResolvedValue({
+        text: '{"summary": "test", "count": 42}',
       });
 
       const service = new OpenCodeProviderService(mockClient);
       const result = await service.generateStructured<{ summary: string; count: number }>({
+        sessionID: 'session-1',
         systemPrompt: 'Be helpful',
         userPrompt: 'Extract data',
         expectedFields: ['summary', 'count'],
@@ -33,9 +39,20 @@ describe('OpenCodeProviderService', () => {
       expect(result?.count).toBe(42);
     });
 
-    it('should return null when client.session.prompt is unavailable', async () => {
+    it('should return null when no sessionID (V2 generate needs a session)', async () => {
+      const service = new OpenCodeProviderService(mockClient);
+      const result = await service.generateStructured({
+        systemPrompt: 'test',
+        userPrompt: 'test',
+      });
+      expect(result).toBeNull();
+      expect(mockClient.session.generate).not.toHaveBeenCalled();
+    });
+
+    it('should return null when client.session.generate is unavailable', async () => {
       const service = new OpenCodeProviderService({});
       const result = await service.generateStructured({
+        sessionID: 'session-1',
         systemPrompt: 'test',
         userPrompt: 'test',
       });
@@ -43,14 +60,13 @@ describe('OpenCodeProviderService', () => {
     });
 
     it('should return null on JSON parse failure', async () => {
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{ text: 'Not JSON at all' }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: 'Not JSON at all',
       });
 
       const service = new OpenCodeProviderService(mockClient);
       const result = await service.generateStructured({
+        sessionID: 'session-1',
         systemPrompt: 'test',
         userPrompt: 'test',
         expectedFields: ['summary'],
@@ -59,14 +75,13 @@ describe('OpenCodeProviderService', () => {
     });
 
     it('should return null when expected fields are missing', async () => {
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{ text: '{"summary": "hello"}' }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: '{"summary": "hello"}',
       });
 
       const service = new OpenCodeProviderService(mockClient);
       const result = await service.generateStructured({
+        sessionID: 'session-1',
         systemPrompt: 'test',
         userPrompt: 'test',
         expectedFields: ['summary', 'missingField'],
@@ -74,11 +89,12 @@ describe('OpenCodeProviderService', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle session.prompt rejection gracefully', async () => {
-      mockClient.session.prompt.mockRejectedValue(new Error('Provider not available'));
+    it('should handle session.generate rejection gracefully', async () => {
+      mockClient.session.generate.mockRejectedValue(new Error('Provider not available'));
 
       const service = new OpenCodeProviderService(mockClient);
       const result = await service.generateStructured({
+        sessionID: 'session-1',
         systemPrompt: 'test',
         userPrompt: 'test',
       });
@@ -86,16 +102,13 @@ describe('OpenCodeProviderService', () => {
     });
 
     it('should extract JSON from markdown code block', async () => {
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{
-            text: 'Here is the result:\n```json\n{"key": "value", "number": 123}\n```',
-          }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: 'Here is the result:\n```json\n{"key": "value", "number": 123}\n```',
       });
 
       const service = new OpenCodeProviderService(mockClient);
       const result = await service.generateStructured<{ key: string; number: number }>({
+        sessionID: 'session-1',
         systemPrompt: 'test',
         userPrompt: 'test',
         expectedFields: ['key', 'number'],
@@ -109,25 +122,21 @@ describe('OpenCodeProviderService', () => {
 
   describe('isAvailable', () => {
     it('should return true when provider responds with status ok', async () => {
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{ text: '{"status": "ok"}' }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: '{"status": "ok"}',
       });
 
-      const service = new OpenCodeProviderService(mockClient);
+      const service = new OpenCodeProviderService(mockClient, SESSION);
       const available = await service.isAvailable();
       expect(available).toBe(true);
     });
 
     it('should return false when provider responds with wrong status', async () => {
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{ text: '{"status": "error"}' }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: '{"status": "error"}',
       });
 
-      const service = new OpenCodeProviderService(mockClient);
+      const service = new OpenCodeProviderService(mockClient, SESSION);
       const available = await service.isAvailable();
       expect(available).toBe(false);
     });
@@ -139,9 +148,9 @@ describe('OpenCodeProviderService', () => {
     });
 
     it('should return false on rejection', async () => {
-      mockClient.session.prompt.mockRejectedValue(new Error('down'));
+      mockClient.session.generate.mockRejectedValue(new Error('down'));
 
-      const service = new OpenCodeProviderService(mockClient);
+      const service = new OpenCodeProviderService(mockClient, SESSION);
       const available = await service.isAvailable();
       expect(available).toBe(false);
     });
@@ -149,22 +158,18 @@ describe('OpenCodeProviderService', () => {
 
   describe('captureStructuredMemory', () => {
     it('should format structured memory from session context', async () => {
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{
-            text: JSON.stringify({
-              summary: 'Worked on authentication',
-              key_decisions: ['Use JWT'],
-              key_learnings: ['Rate limit at 100/min'],
-              active_tasks: ['Add refresh token'],
-              tags: ['auth', 'security'],
-            }),
-          }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: JSON.stringify({
+          summary: 'Worked on authentication',
+          key_decisions: ['Use JWT'],
+          key_learnings: ['Rate limit at 100/min'],
+          active_tasks: ['Add refresh token'],
+          tags: ['auth', 'security'],
+        }),
       });
 
       const service = new OpenCodeProviderService(mockClient);
-      const result = await service.captureStructuredMemory('Session context here...');
+      const result = await service.captureStructuredMemory('Session context here...', 'session-1');
 
       expect(result).not.toBeNull();
       expect(result).toContain('Worked on authentication');
@@ -174,32 +179,34 @@ describe('OpenCodeProviderService', () => {
     });
 
     it('should return null when provider returns no summary', async () => {
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{ text: '{"tags": ["test"]}' }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: '{"tags": ["test"]}',
       });
 
       const service = new OpenCodeProviderService(mockClient);
-      const result = await service.captureStructuredMemory('Session context...');
+      const result = await service.captureStructuredMemory('Session context...', 'session-1');
       expect(result).toBeNull();
     });
 
     it('should return null when client unavailable', async () => {
       const service = new OpenCodeProviderService({});
+      const result = await service.captureStructuredMemory('test', 'session-1');
+      expect(result).toBeNull();
+    });
+
+    it('should return null when no sessionID', async () => {
+      const service = new OpenCodeProviderService(mockClient);
       const result = await service.captureStructuredMemory('test');
       expect(result).toBeNull();
     });
 
     it('should handle malformed JSON gracefully', async () => {
-      mockClient.session.prompt.mockResolvedValue({
-        body: {
-          parts: [{ text: 'not json at all and no code blocks' }],
-        },
+      mockClient.session.generate.mockResolvedValue({
+        text: 'not json at all and no code blocks',
       });
 
       const service = new OpenCodeProviderService(mockClient);
-      const result = await service.captureStructuredMemory('test');
+      const result = await service.captureStructuredMemory('test', 'session-1');
       expect(result).toBeNull();
     });
   });

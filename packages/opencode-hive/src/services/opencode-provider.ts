@@ -7,7 +7,8 @@
  * token refresh, and provider routing — no extra API configuration needed.
  *
  * Key design:
- * - Uses `client.session.prompt()` for LLM calls (no separate API keys)
+ * - Uses `client.session.generate()` for transient LLM calls (no separate API keys);
+ *   OpenCode V2 runs transient generation inside a session, so a sessionID is required.
  * - Simplified schema validation (not Zod — keeps bundle size small)
  * - 0-risk: every method catches errors and returns null
  * - Graceful degradation when client is unavailable
@@ -16,6 +17,12 @@
 export interface GenerateStructedParams {
   systemPrompt: string;
   userPrompt: string;
+  /**
+   * Session used for the transient generation request. OpenCode V2's
+   * `session.generate` always runs inside a session; without a sessionID
+   * the request is skipped (0-risk degradation).
+   */
+  sessionID?: string;
   /** Expected fields in the response (simplified schema: just field names for validation) */
   expectedFields?: string[];
 }
@@ -25,34 +32,37 @@ export interface GenerateStructedParams {
  * No extra API keys needed — piggybacks on the user's existing provider.
  */
 export class OpenCodeProviderService {
-  constructor(private client: any) {}
+  /**
+   * @param defaultSessionID Default session for transient generation calls
+   *   (V2 `session.generate` runs inside a session). Individual calls can
+   *   still provide a `sessionID` parameter that takes precedence.
+   */
+  constructor(private client: any, private defaultSessionID?: string) {}
 
   /**
-   * Ask the LLM to extract structured information via session.prompt.
+   * Ask the LLM to extract structured information via session.generate.
    * Uses the connected OpenCode provider — no separate API configuration.
+   * OpenCode V2's `session.generate` runs inside a session, so a sessionID
+   * is required; without one the request is skipped (0-risk).
    *
    * @returns Parsed JSON object, or null on any failure (0-risk)
    */
   async generateStructured<T extends Record<string, unknown> = Record<string, unknown>>(
     params: GenerateStructedParams,
   ): Promise<T | null> {
-    // 0-risk guard
-    if (!this.client?.session?.prompt) return null;
+    let sessionID = params.sessionID;
+    // 0-risk guard: fall back to the provider's default session, then skip
+    if (!sessionID) sessionID = this.defaultSessionID;
+    if (!sessionID || !this.client?.session?.generate) return null;
 
     try {
-      const response = await this.client.session.prompt({
-        body: {
-          parts: [
-            { type: 'text' as const, text: params.systemPrompt, synthetic: true as const },
-            { type: 'text' as const, text: params.userPrompt },
-          ],
-          noReply: true as const,
-        },
+      const response = await this.client.session.generate({
+        sessionID,
+        prompt: `${params.systemPrompt}\n\n${params.userPrompt}`,
       });
 
-      if (!response?.body?.parts?.[0]?.text) return null;
-
-      const text = response.body.parts[0].text;
+      const text = response?.text;
+      if (!text) return null;
 
       // Try to parse JSON from response
       const parsed = this.parseJSON(text);
@@ -100,7 +110,7 @@ export class OpenCodeProviderService {
    * @param sessionContext - Raw session text to structure
    * @returns Structured memory content, or null on failure
    */
-  async captureStructuredMemory(sessionContext: string): Promise<string | null> {
+  async captureStructuredMemory(sessionContext: string, sessionID?: string): Promise<string | null> {
     const systemPrompt = [
       'You are a memory curator. Extract key information from the following session context.',
       'Respond with a JSON object containing:',
@@ -120,6 +130,7 @@ export class OpenCodeProviderService {
     }>({
       systemPrompt,
       userPrompt: `Session context:\n\n${sessionContext.slice(0, 4000)}`,
+      sessionID,
       expectedFields: ['summary'],
     });
 

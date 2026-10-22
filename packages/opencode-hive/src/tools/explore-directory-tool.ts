@@ -1,7 +1,7 @@
-import { tool, type ToolDefinition } from '@opencode-ai/plugin';
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import { exploreDirectory } from './explore-directory.js';
 
-export const exploreDirectoryTool: ToolDefinition = tool({
+export const exploreDirectoryTool: ToolDefinition = tool("explore_directory", {
   description: `Explore a directory and return a structured tree overview.
 Walks the directory recursively with depth limit, applies .gitignore filtering, detects binary files, and reports symlinks without following them.
 

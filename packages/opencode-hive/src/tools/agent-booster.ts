@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getHiveNodeModulesPath, getGlobalNpmRoot } from '../utils/tool-installer.js';
@@ -282,7 +282,7 @@ export async function getBoosterStatus(): Promise<{
 // Tool Definition
 // ============================================================================
 
-export const hiveCodeEditTool: ToolDefinition = tool({
+export const hiveCodeEditTool: ToolDefinition = tool("hive_code_edit", {
   description: `Ultra-fast code editing using agent-booster (52x faster than Morph, FREE).
 
 **Features:**
@@ -335,7 +335,7 @@ export const hiveCodeEditTool: ToolDefinition = tool({
  * Lazy edit marker tool - uses agent-booster's special marker syntax
  * Allows partial code snippets with // ... existing code ... placeholders
  */
-export const hiveLazyEditTool: ToolDefinition = tool({
+export const hiveLazyEditTool: ToolDefinition = tool("hive_lazy_edit", {
   description: `Fast code editing with lazy markers using agent-booster.
 
 **Lazy Markers:**
@@ -404,7 +404,7 @@ const newFunction = () => { ... };
 /**
  * Tool to check agent-booster status
  */
-export const hiveBoosterStatusTool: ToolDefinition = tool({
+export const hiveBoosterStatusTool: ToolDefinition = tool("hive_booster_status", {
   description: `Check agent-booster availability and status.
 
 **Returns:**

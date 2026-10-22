@@ -76,33 +76,24 @@ export async function reInjectMemoriesAfterCompact(
       '</persistent_memory>',
     ].join('\n');
 
-    // Step 3: Try to inject via session.prompt (OpenCode-specific API)
+    // Step 3: Inject a synthetic message into the session (V2 session.synthetic)
     // This is a fire-and-forget call — never await on the user-facing path
-    if (client?.session?.prompt) {
+    if (client?.session?.synthetic) {
       try {
-        await client.session.prompt({
-          path: { id: sessionID },
-          body: {
-            parts: [
-              {
-                type: 'text' as const,
-                text: memoryContext,
-                synthetic: true as const,
-              },
-            ],
-            noReply: true as const,
-          },
+        await client.session.synthetic({
+          sessionID,
+          text: memoryContext,
         });
       } catch (promptError) {
-        // 0-risk: session.prompt might not be available or might fail
+        // 0-risk: session.synthetic might not be available or might fail
         console.warn(
-          '[compaction-restoration] Failed to inject memories via session.prompt:',
+          '[compaction-restoration] Failed to inject memories via session.synthetic:',
           promptError instanceof Error ? promptError.message : promptError,
         );
       }
     }
 
-    // Step 4: Show toast notification (best-effort)
+    // Step 4: Show toast notification (best-effort; V2 has no TUI API)
     if (client?.tui?.showToast) {
       try {
         await client.tui.showToast({

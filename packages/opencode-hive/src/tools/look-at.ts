@@ -5,7 +5,7 @@
  * For large files, returns structure/outline instead of full content.
  */
 
-import { tool, type ToolDefinition } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import { readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
 
@@ -178,7 +178,7 @@ export interface LookAtArgs {
   extract?: "structure" | "imports" | "exports" | "all";
 }
 
-export const lookAtTool: ToolDefinition = tool({
+export const lookAtTool: ToolDefinition = tool("look_at", {
   description: `Extract key information from a file to save context tokens.
 For large files, returns structure/outline instead of full content.
 Use when you need to understand a file without loading all content.

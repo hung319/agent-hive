@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import { lspStatusManager, getLspStatus, ensureLspInstalled, type LspStatus } from './lsp-manager.js';
 import { getLanguageFromPath } from '../lsp/registry.js';
 import { LspManager, getLspClientForFile } from '../lsp/manager.js';
@@ -37,7 +37,7 @@ async function readFileContent(filePath: string): Promise<string> {
   }
 }
 
-export const lspRenameTool: ToolDefinition = tool({
+export const lspRenameTool: ToolDefinition = tool("lsp_rename", {
   description: `Rename a symbol across all files using LSP. Provides IDE-like rename refactoring.
 
 **Features:**
@@ -157,7 +157,7 @@ lsp_rename({ filePath: "src/utils.ts", oldName: "getUser", newName: "fetchUser" 
   },
 });
 
-export const lspGotoDefinitionTool: ToolDefinition = tool({
+export const lspGotoDefinitionTool: ToolDefinition = tool("lsp_goto_definition", {
   description: `Navigate to the definition of a symbol using LSP.
 
 **Features:**
@@ -236,7 +236,7 @@ export const lspGotoDefinitionTool: ToolDefinition = tool({
   },
 });
 
-export const lspFindReferencesTool: ToolDefinition = tool({
+export const lspFindReferencesTool: ToolDefinition = tool("lsp_find_references", {
   description: `Find all references to a symbol using LSP.
 
 **Features:**
@@ -311,7 +311,7 @@ export const lspFindReferencesTool: ToolDefinition = tool({
   },
 });
 
-export const lspDiagnosticsTool: ToolDefinition = tool({
+export const lspDiagnosticsTool: ToolDefinition = tool("lsp_diagnostics", {
   description: `Get diagnostics (errors, warnings, info) for a file using LSP.
 
 **Features:**
@@ -411,7 +411,7 @@ export const lspDiagnosticsTool: ToolDefinition = tool({
   },
 });
 
-export const lspHoverTool: ToolDefinition = tool({
+export const lspHoverTool: ToolDefinition = tool("lsp_hover", {
   description: `Get hover information for a symbol using LSP.
 
 **Features:**
@@ -486,7 +486,7 @@ export const lspHoverTool: ToolDefinition = tool({
   },
 });
 
-export const lspCodeActionsTool: ToolDefinition = tool({
+export const lspCodeActionsTool: ToolDefinition = tool("lsp_code_actions", {
   description: `Get available code actions using LSP.
 
 **Features:**
@@ -535,7 +535,7 @@ export const lspCodeActionsTool: ToolDefinition = tool({
 // LSP Status Tool
 // ============================================================================
 
-export const lspStatusTool: ToolDefinition = tool({
+export const lspStatusTool: ToolDefinition = tool("lsp_status", {
   description: `Check LSP server status and install missing servers.
 
 **Features:**
@@ -608,7 +608,7 @@ lsp_status({ install: true })
 // LSP Install Tool
 // ============================================================================
 
-export const lspInstallTool: ToolDefinition = tool({
+export const lspInstallTool: ToolDefinition = tool("lsp_install", {
   description: `Install LSP server for a specific language.
 
 **Features:**

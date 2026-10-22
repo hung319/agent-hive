@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from '@opencode-ai/plugin';
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -402,7 +402,7 @@ export function getCallPath(from: string, to: string, rootPath: string): string[
 // Tool: call_graph_extract
 // ============================================================================
 
-export const callGraphExtractTool: ToolDefinition = tool({
+export const callGraphExtractTool: ToolDefinition = tool("call_graph_extract", {
   description: `Extract all function calls from a file using AST-based analysis.
 
 **Parameters:**
@@ -453,7 +453,7 @@ call_graph_extract({ filePath: "src/tools/ast-grep.ts" })
 // Tool: call_graph_callees
 // ============================================================================
 
-export const callGraphCalleesTool: ToolDefinition = tool({
+export const callGraphCalleesTool: ToolDefinition = tool("call_graph_callees", {
   description: 'Find all functions called by a given function (callees). Builds a call graph from the project and returns all direct callees. Analyzes .ts, .tsx, .js, .jsx files.',
 
   args: {
@@ -485,7 +485,7 @@ export const callGraphCalleesTool: ToolDefinition = tool({
 // Tool: call_graph_callers
 // ============================================================================
 
-export const callGraphCallersTool: ToolDefinition = tool({
+export const callGraphCallersTool: ToolDefinition = tool("call_graph_callers", {
   description: 'Find all functions that call a given function (callers). Builds a call graph from the project and returns all direct callers. Analyzes .ts, .tsx, .js, .jsx files.',
 
   args: {
@@ -517,7 +517,7 @@ export const callGraphCallersTool: ToolDefinition = tool({
 // Tool: call_graph_path
 // ============================================================================
 
-export const callGraphPathTool: ToolDefinition = tool({
+export const callGraphPathTool: ToolDefinition = tool("call_graph_path", {
   description: `Find the shortest call path between two functions (BFS).
 
 Builds a call graph from the project and finds the shortest path

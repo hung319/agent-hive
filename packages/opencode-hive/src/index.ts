@@ -1,7 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { tool, type Plugin, type ToolDefinition } from "@opencode-ai/plugin";
+import { Plugin } from "@opencode/plugin";
+import { tool, type ToolDefinition, configureToolCompat } from './compat/v2-tool.js';
 import { getFilteredSkills, loadBuiltinSkill } from './skills/builtin.js';
 import { loadFileSkill } from './skills/file-loader.js';
 import { BUILTIN_SKILLS } from './skills/registry.generated.js';
@@ -176,7 +177,7 @@ Use this when a task matches an available skill's description. The descriptions 
   // Build a set of available skill names for validation
   const availableNames = new Set(filteredSkills.map(s => s.name));
 
-  return tool({
+  return tool('hive_skill', {
     description,
     args: {
       name: tool.schema.string().describe('The skill name from available_skills'),
@@ -229,8 +230,8 @@ import { calculatePromptMeta, calculatePayloadMeta, checkWarnings } from "./util
 import { applyTaskBudget, applyContextBudget, DEFAULT_BUDGET, type TruncationEvent } from "./utils/prompt-budgeting";
 import { writeWorkerPromptFile } from "./utils/prompt-file";
 import { formatRelativeTime } from "./utils/format";
-import { createVariantHook } from "./hooks/variant-hook.js";
 import { HIVE_SYSTEM_PROMPT, shouldExecuteHook } from "./hooks/system-hook.js";
+import { writeAgentDefinitions, toV2McpConfig, type RuntimeAgentConfig } from './agents/v2-bootstrap.js';
 import {
   createLspDiagnosticsState,
   trackFileModification,
@@ -401,8 +402,17 @@ function autoSaveProjectMemory(
   }
 }
 
-const plugin: Plugin = async (ctx) => {
-  const { directory, client } = ctx;
+const plugin = Plugin.define({
+  id: 'opencode-hive',
+  async setup(ctx) {
+  const directory = ctx.location.directory;
+  // The V2 plugin context exposes the OpenCode client domains directly.
+  const client = ctx as unknown as Record<string, unknown>;
+
+  configureToolCompat({
+    directory,
+    permission: ctx.permission as never,
+  });
 
   // Auto-add .hive/ to .gitignore on every init
   ensureHiveGitignore(directory);
@@ -429,6 +439,8 @@ const plugin: Plugin = async (ctx) => {
   const nsModeState = createNsModeState();
   // Session continuation state: prevents re-injection in the same compaction cycle
   const continuationState = createContinuationState();
+  // Cleanup functions for the V2 event subscription (judge idle hook)
+  const idleCleanup: Array<() => void> = [];
   const disabledMcps = configService.getDisabledMcps();
   const disabledSkills = configService.getDisabledSkills();
   // Initialize vector memory sharding + quality from user config
@@ -1048,22 +1060,27 @@ Use the \`@path\` attachment syntax in the prompt to reference the file. Do not 
     });
   };
 
-  return {
-    "experimental.chat.system.transform": safeHook(
-      'experimental.chat.system.transform',
-      async (input: { agent?: string } | unknown, output: { system: string[] }) => {
-        // Cadence gate: check if this hook should execute this turn
-        if (!shouldExecuteHook("experimental.chat.system.transform", configService, turnCounters)) {
-          return;
-        }
+  // ---------------------------------------------------------------------------
+  // V2 hooks — registered through their owning domains (was the V1 hook map)
+  // ---------------------------------------------------------------------------
 
-        output.system.push(HIVE_SYSTEM_PROMPT);
+  // Was experimental.chat.system.transform (V1) → session 'context' hook (V2)
+  await ctx.session.hook('context', async (event) => {
+    const system = event.system as Array<{ type: 'text'; text: string }>;
+    const systemPush = (text: string) => system.push({ type: 'text', text });
 
-        // Inject memory blocks into system prompt
-        try {
-          const memoryInjection = await buildMemoryInjection(directory);
-          if (memoryInjection) {
-            output.system.push(memoryInjection);
+    // Cadence gate: check if this hook should execute this turn
+    if (!shouldExecuteHook('context', configService, turnCounters)) {
+      return;
+    }
+
+    systemPush(HIVE_SYSTEM_PROMPT);
+
+    // Inject memory blocks into system prompt
+    try {
+      const memoryInjection = await buildMemoryInjection(directory);
+      if (memoryInjection) {
+        systemPush(memoryInjection);
           }
         } catch {
           // 0-risk: memory injection failure
@@ -1089,7 +1106,7 @@ Use the \`@path\` attachment syntax in the prompt to reference the file. Do not 
             if (results && results.length > 0) {
               const formatted = formatAutoRecallInjection(results, 300);
               if (formatted) {
-                output.system.push('\n' + formatted);
+                systemPush('\n' + formatted);
               }
             }
           } catch (error) {
@@ -1110,7 +1127,7 @@ Use the \`@path\` attachment syntax in the prompt to reference the file. Do not 
                 statusHint += `**Comments**: ${info.commentCount} unresolved - address with hive_plan_read\n`;
               }
 
-              output.system.push(statusHint);
+              systemPush(statusHint);
             }
           } catch {
             // 0-risk: feature status injection failure
@@ -1123,7 +1140,7 @@ Use the \`@path\` attachment syntax in the prompt to reference the file. Do not 
           if (upService) {
             const profileInjection = upService.getProfileInjection();
             if (profileInjection) {
-              output.system.push('\n### User Profile (Learned Preferences)\n' + profileInjection);
+              systemPush('\n### User Profile (Learned Preferences)\n' + profileInjection);
             }
           }
         } catch {
@@ -1135,7 +1152,7 @@ Use the \`@path\` attachment syntax in the prompt to reference the file. Do not 
         try {
           const diagBlock = runTypeScriptDiagnostics(lspState, directory);
           if (diagBlock) {
-            output.system.push(diagBlock);
+            systemPush(diagBlock);
           }
         } catch {
           // 0-risk: diagnostics failure should not block the chat
@@ -1146,7 +1163,7 @@ Use the \`@path\` attachment syntax in the prompt to reference the file. Do not 
           if (nsModeState.active) {
             const directive = getNsDirective();
             if (directive) {
-              output.system.push(directive);
+              systemPush(directive);
             }
             nsModeState.deactivate();
           }
@@ -1159,7 +1176,7 @@ Use the \`@path\` attachment syntax in the prompt to reference the file. Do not 
           if (continuationState.injected) {
             const { feature, pending, nextTask } = getPendingTaskCount(directory);
             if (feature && pending.length > 0) {
-              output.system.push(`\n## Session Continuation\nContinue working on feature "${feature}". ${pending.length} task(s) remaining. Next: "${nextTask?.name ?? 'check hive_status'}"`);
+              systemPush(`\n## Session Continuation\nContinue working on feature "${feature}". ${pending.length} task(s) remaining. Next: "${nextTask?.name ?? 'check hive_status'}"`);
             }
           }
         } catch {
@@ -1173,17 +1190,19 @@ Use the \`@path\` attachment syntax in the prompt to reference the file. Do not 
           // 0-risk
         }
       },
-    ),
+    );
 
     // Context compression hook - auto compresses at 50% context threshold
     // Similar to DCP (Dynamic Context Pruning) or oh-my-openagent
-    // Also captures session snapshot for continuity
-    "experimental.session.compacting": safeHook(
-      'experimental.session.compacting',
-      async (
-        input: { sessionID: string; messages?: unknown[]; contextLimit?: number },
-        output: { context: string[]; prompt?: string },
-      ) => {
+    // Also captures session snapshot for continuity.
+    // Was experimental.session.compacting (V1) → session 'compaction' hook (V2).
+    // In V2 the compaction hook only shapes the summarizer model call, so the
+    // snapshot/hints are pushed into the compaction system prompt instead of
+    // mutable hook output.
+    await ctx.session.hook('compaction', async (event) => {
+      const system = event.system as Array<{ type: 'text'; text: string }>;
+      const compPush = (text: string) => system.push({ type: 'text', text });
+      const input = { sessionID: (event as { sessionID?: string }).sessionID, messages: event.messages as unknown[] };
       // Get config
       const snapshotConfig = configService.get().sessionSnapshot;
       const compressionConfig = configService.get().contextCompression;
@@ -1233,7 +1252,7 @@ Use the \`@path\` attachment syntax in the prompt to reference the file. Do not 
         
         if (snapshotParts.length > 0) {
           const snapshot = snapshotParts.join('\n').slice(0, maxChars);
-          output.context.push(`
+          compPush(`
 ## Session Snapshot (before compaction)
 
 ${snapshot}
@@ -1243,8 +1262,9 @@ ${snapshot}
         }
       }
       
-      // Context compression
-      const contextLimit = input.contextLimit || 200000;
+      // Context compression — V2 compaction events carry the message list but
+      // no contextLimit; reuse the tool-gate estimate instead.
+      const contextLimit = 200000;
       const messages = (input.messages || []) as Array<{ role?: string; content?: unknown; tool_calls?: unknown[] }>;
       
       if (messages.length > 0) {
@@ -1268,12 +1288,12 @@ ${snapshot}
           
           console.log(`[hive:compaction] Context at ${Math.round(stats.reductionRatio * 100)}% - compressed ${stats.originalMessages} → ${stats.compressedMessages} messages`);
           
-          output.context.push(buildCompressionHint());
+          compPush(buildCompressionHint());
         } else {
-          output.context.push(buildCompactionPrompt());
+          compPush(buildCompactionPrompt());
         }
       } else {
-        output.context.push(buildCompactionPrompt());
+        compPush(buildCompactionPrompt());
       }
 
       // Auto-capture: save session snapshot as vector memory (zero-API-call pattern)
@@ -1300,14 +1320,17 @@ ${snapshot}
                 pendingTasks,
               );
 
-              // Check provider mode: "opencode" uses session.prompt for structured capture
+              // Check provider mode: "opencode" uses session.generate for structured capture
               const providerMode = autoCaptureConfig?.provider?.mode ?? 'manual';
               let contentToSave = snapshotContent;
 
               if (providerMode === 'opencode' && client) {
                 try {
                   const provider = new OpenCodeProviderService(client);
-                  const structured = await provider.captureStructuredMemory(snapshotContent);
+                  const structured = await provider.captureStructuredMemory(
+                    snapshotContent,
+                    (event as { sessionID?: string }).sessionID,
+                  );
                   if (structured) {
                     contentToSave = structured;
                   }
@@ -1363,9 +1386,9 @@ ${snapshot}
         if (!continuationState.injected) {
           const { feature, pending, nextTask } = getPendingTaskCount(directory);
           if (feature && pending.length > 0) {
-            const ctx = buildContinuationContext(feature, pending, nextTask);
-            if (ctx) {
-              output.context.push(ctx);
+            const continuationContext = buildContinuationContext(feature, pending, nextTask);
+            if (continuationContext) {
+              compPush(continuationContext);
               continuationState.markInjected();
             }
           }
@@ -1373,15 +1396,14 @@ ${snapshot}
       } catch {
         // 0-risk: continuation check failure
       }
-    }
-    ),
+    });
 
     // Hidden-session judge: evaluate task completion after agent turns
     // Pattern from dzianisv/opencode-plugins — opt-in (consumes LLM tokens when enabled)
-    // 0-risk: best-effort, never blocks the session, anti-recursion guard
-    "session.idle": safeHook(
-      'session.idle',
-      async (input: { sessionID: string; messages?: unknown[] }, _output: unknown) => {
+    // 0-risk: best-effort, never blocks the session, anti-recursion guard.
+    // Was the session.idle hook (V1) → a filtered event subscription (V2 V2Event).
+    {
+      const sessionIdleHandler = async (input: { sessionID?: string; messages?: unknown[] }) => {
         const judgeConfig = configService.get().hiddenJudge;
         if (!judgeConfig?.enabled) return;
 
@@ -1440,136 +1462,162 @@ ${snapshot}
         } catch (error) {
           console.warn('[hidden-judge] Hook error:', error instanceof Error ? error.message : error);
         }
-      },
-    ),
+      };
 
-    // Apply per-agent variant to messages (covers built-in and accepted custom task() agents)
-    "chat.message": safeHook(
-      'chat.message',
-      async (input: any, output: any) => {
-        // Apply variant hook
-        try {
-          await createVariantHook(configService)(input, output);
-        } catch {
-          // 0-risk: variant assignment failure
-        }
-        // User profile: track user messages (best-effort, 0-risk)
-        try {
-          const inputMsg = input?.message ?? input?.body ?? {};
-          if (inputMsg.role === 'user') {
-            const text = inputMsg.text ?? inputMsg.content ?? '';
-            if (text) {
-              const upService = ensureUserProfile();
-              if (upService) {
-                upService.onUserMessage(text).catch(() => {});
-              }
+      const idleController = new AbortController();
+      try {
+        void (async () => {
+          for await (const idleEvent of ctx.event.subscribe({ signal: idleController.signal })) {
+            if (idleEvent.type !== 'session.idle') continue;
+            // V2 events carry their payload in `properties` (schema-encoded).
+            const props = ((idleEvent as { properties?: Record<string, unknown> }).properties ?? {}) as { sessionID?: string };
+            const idleSessionID = props.sessionID;
+            if (!idleSessionID) continue;
+
+            let recentMessages: unknown[] = [];
+            try {
+              const context = await ctx.session.context({ sessionID: idleSessionID });
+              recentMessages = (context ?? []).map((entry: Record<string, unknown> | unknown) => {
+                const m = entry as { info?: { role?: string; text?: string }; role?: string };
+                return { role: m.info?.role ?? m.role, content: m.info?.text };
+              });
+            } catch {
+              // 0-risk: judge context fetch failure
             }
+            await sessionIdleHandler({ sessionID: idleSessionID, messages: recentMessages });
           }
-        } catch {
-          // 0-risk: never throw from hook
-        }
-        // $ns mode: detect keyword in user messages
-        try {
-          const inputMsg = input?.message ?? input?.body ?? {};
-          if (inputMsg.role === 'user') {
-            const text = inputMsg.text ?? inputMsg.content ?? '';
-            if (text && typeof text === 'string' && detectNsMode(text)) {
-              nsModeState.activate();
-            }
+        })().catch(() => { /* 0-risk: subscription failure */ });
+      } catch {
+        // 0-risk: subscription failure
+      }
+      idleCleanup.push(() => idleController.abort());
+    }
+
+    // Apply per-agent variant to messages is now handled by the generated
+    // agent definitions (model + #variant at bootstrap), not a per-message hook.
+
+    // Was chat.message (V1) → session 'prompt' hook (V2). Fires once per
+    // admitted user prompt: profile tracking + $ns keyword detection.
+    await ctx.session.hook('prompt', async (event) => {
+      const prompt = (event as { prompt?: { text?: string } }).prompt;
+      const text = prompt?.text ?? '';
+
+      // User profile: track user messages (best-effort, 0-risk)
+      try {
+        if (text) {
+          const upService = ensureUserProfile();
+          if (upService) {
+            upService.onUserMessage(text, (event as { sessionID?: string }).sessionID).catch(() => { /* 0-risk */ });
           }
-        } catch {
-          // 0-risk: $ns detection failure
         }
-      },
-    ) as any,
+      } catch {
+        // 0-risk: never throw from hook
+      }
 
-    "tool.execute.before": safeHook(
-      'tool.execute.before',
-      async (input: { tool?: string; args?: Record<string, unknown> }, output: { args?: { command?: string; workdir?: string } }) => {
-        // Cadence gate: check if this hook should execute this turn
-        if (!shouldExecuteHook("tool.execute.before", configService, turnCounters, { safetyCritical: true })) {
-          return;
+      // $ns mode: detect keyword in user messages
+      try {
+        if (text && detectNsMode(text)) {
+          nsModeState.activate();
         }
+      } catch {
+        // 0-risk: $ns detection failure
+      }
+    });
 
-        if (input.tool !== "bash") return;
+    // Was tool.execute.before (V1, bash only) → shell 'create.before' hook (V2):
+    // RTK token-reduction prefix, Docker sandbox wrapping for hive worktrees,
+    // and the HOST: escape hatch (logged, not auto-applied by agents).
+    await ctx.shell.hook('create.before', async (event) => {
+      // Cadence gate: check if this hook should execute this turn
+      if (!shouldExecuteHook("tool.execute.before", configService, turnCounters, { safetyCritical: true })) {
+        return;
+      }
+
+      const command = event.command.trim();
+      if (!command) return;
+      
+      // Escape hatch: HOST: prefix (case-insensitive)
+      if (/^HOST:\s*/i.test(command)) {
+        const strippedCommand = command.replace(/^HOST:\s*/i, '');
+        console.warn(`[hive:sandbox] HOST bypass: ${strippedCommand.slice(0, 80)}${strippedCommand.length > 80 ? '...' : ''}`);
+        event.command = strippedCommand;
+        return;
+      }
+
+      try {
+        const rtkConfig = configService.get().rtk;
+        const rtkBinary = await rtkBootPromise;
+        const rtkAvailable = rtkBinary !== '';
+        const isRtkEnabled = rtkConfig?.enabled ?? rtkAvailable;
+        const rtkCmd = rtkConfig?.command || (rtkBinary || 'rtk');
+        let finalCommand = command;
+        if (isRtkEnabled && rtkAvailable) {
+          finalCommand = prefixWithRtk(command, rtkCmd);
+        }
+        // PATH is now set in shell config (~/.bashrc, ~/.zshrc, etc.)
+        // by ensureHivePathInShellConfig() on plugin init
         
-        const command = output.args?.command?.trim();
-        if (!command) return;
-        
-        // Escape hatch: HOST: prefix (case-insensitive)
-        if (/^HOST:\s*/i.test(command)) {
-          const strippedCommand = command.replace(/^HOST:\s*/i, '');
-          console.warn(`[hive:sandbox] HOST bypass: ${strippedCommand.slice(0, 80)}${strippedCommand.length > 80 ? '...' : ''}`);
-          output.args.command = strippedCommand;
-          return;
-        }
-
-        try {
-          const rtkConfig = configService.get().rtk;
-          const rtkBinary = await rtkBootPromise;
-          const rtkAvailable = rtkBinary !== '';
-          const isRtkEnabled = rtkConfig?.enabled ?? rtkAvailable;
-          const rtkCmd = rtkConfig?.command || (rtkBinary || 'rtk');
-          let finalCommand = command;
-          if (isRtkEnabled && rtkAvailable) {
-            finalCommand = prefixWithRtk(command, rtkCmd);
-          }
-          // PATH is now set in shell config (~/.bashrc, ~/.zshrc, etc.)
-          // by ensureHivePathInShellConfig() on plugin init
-          
-          const sandboxConfig = configService.getSandboxConfig();
-          if (sandboxConfig.mode !== 'none') {
-            const workdir = output.args?.workdir;
-            if (workdir) {
-              const hiveWorktreeBase = path.join(directory, '.hive', '.worktrees');
-              if (workdir.startsWith(hiveWorktreeBase)) {
-                const wrapped = DockerSandboxService.wrapCommand(workdir, finalCommand, sandboxConfig);
-                output.args.command = wrapped;
-                output.args.workdir = undefined;
-                return;
-              }
+        const sandboxConfig = configService.getSandboxConfig();
+        if (sandboxConfig.mode !== 'none') {
+          const workdir = event.cwd;
+          if (workdir) {
+            const hiveWorktreeBase = path.join(directory, '.hive', '.worktrees');
+            if (workdir.startsWith(hiveWorktreeBase)) {
+              const wrapped = DockerSandboxService.wrapCommand(workdir, finalCommand, sandboxConfig);
+              event.command = wrapped;
+              event.env = { ...event.env };
+              return;
             }
           }
-          
-          output.args.command = finalCommand;
-        } catch {
-          // 0-risk: if any processing fails, use the original command unchanged
-          output.args.command = command;
         }
-      },
-    ),
+        
+        event.command = finalCommand;
+      } catch {
+        // 0-risk: if any processing fails, use the original command unchanged
+        event.command = command;
+      }
+    });
 
     // LSP file tracking + token truncation hook
-    "tool.execute.after": safeHook(
-      'tool.execute.after',
-      async (input: { tool: string; sessionID: string; callID: string; args: any }, output: { title: string; output: string; metadata: any }) => {
-        // Track files modified by Write/Edit tools for LSP auto-diagnostics
-        trackFileModification(lspState, input.tool, input.args);
+    // Was tool.execute.after (V1) → tool 'execute.after' hook (V2). The V2
+    // event carries `status` and a `Tool.Result` — truncation rewrites
+    // `result.content` when it is plain text.
+    await ctx.tool.hook('execute.after', async (event) => {
+      const isCompleted = (event as { status?: string }).status === 'completed';
+      const toolArgs = (event as { input?: unknown }).input as { filePath?: string; path?: string } | undefined;
 
-        const truncationConfig = configService.get().tokenTruncation;
-        if (!truncationConfig?.enabled) return;
-        
-        const result = output.output;
-        if (!result) return;
-        
-        const maxChars = truncationConfig.maxChars ?? 30000;
-        if (result.length <= maxChars) return;
-        
-        const keepFirst = truncationConfig.keepFirstPercent ?? 40;
-        const keepLast = truncationConfig.keepLastPercent ?? 40;
-        
-        const firstChars = Math.floor((result.length * keepFirst) / 100);
-        const lastChars = Math.floor((result.length * keepLast) / 100);
-        
-        const truncated = result.slice(0, firstChars) + 
-          `\n\n[... ${result.length - firstChars - lastChars} characters truncated ...]\n\n` + 
-          result.slice(-lastChars);
-        
-        output.output = truncated;
-      },
-    ),
+      // Track files modified by Write/Edit tools for LSP auto-diagnostics
+      trackFileModification(lspState, (event as { tool?: string }).tool ?? '', toolArgs as never);
 
-    tool: {
+      const truncationConfig = configService.get().tokenTruncation;
+      if (!truncationConfig?.enabled || !isCompleted) return;
+      
+      const result = (event as { result?: { content?: unknown } }).result;
+      const resultContent = result?.content;
+      if (!resultContent || typeof resultContent === 'object' && Array.isArray(resultContent)) {
+        // Structured content lists are left untouched (truncating only plain text).
+        return;
+      }
+      if (typeof resultContent !== 'string') return;
+      
+      const maxChars = truncationConfig.maxChars ?? 30000;
+      if (resultContent.length <= maxChars) return;
+      
+      const keepFirst = truncationConfig.keepFirstPercent ?? 40;
+      const keepLast = truncationConfig.keepLastPercent ?? 40;
+      
+      const firstChars = Math.floor((resultContent.length * keepFirst) / 100);
+      const lastChars = Math.floor((resultContent.length * keepLast) / 100);
+      
+      const truncated = resultContent.slice(0, firstChars) + 
+        `\n\n[... ${resultContent.length - firstChars - lastChars} characters truncated ...]\n\n` + 
+        resultContent.slice(-lastChars);
+      
+      (event as { result?: { content?: string } }).result = { ...(result ?? {}), content: truncated };
+    });
+
+    // Tools are registered through ctx.tool.transform at the end of setup.
+    const toolMap: Record<string, ToolDefinition> = {
       look_at: lookAtTool,
       artifact_search: artifactSearchTool,
       btca_ask: btcaAskTool,
@@ -1648,7 +1696,7 @@ ${snapshot}
 
       hive_skill: createHiveSkillTool(filteredSkills),
 
-      hive_feature_create: tool({
+      hive_feature_create: tool('hive_feature_create', {
         description: 'Create a new feature and set it as active',
         args: {
           name: tool.schema.string().describe('Feature name'),
@@ -1693,7 +1741,7 @@ NEXT: Ask your first clarifying question about this feature.`;
         },
       }),
 
-      hive_feature_complete: tool({
+      hive_feature_complete: tool('hive_feature_complete', {
         description: 'Mark feature as completed (irreversible)',
         args: { name: tool.schema.string().optional().describe('Feature name (defaults to active)') },
         async execute({ name }) {
@@ -1704,7 +1752,7 @@ NEXT: Ask your first clarifying question about this feature.`;
         },
       }),
 
-      hive_plan_write: tool({
+      hive_plan_write: tool('hive_plan_write', {
         description: 'Write plan.md (clears existing comments)',
         args: {
           content: tool.schema.string().describe('Plan markdown content'),
@@ -1751,7 +1799,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_plan_read: tool({
+      hive_plan_read: tool('hive_plan_read', {
         description: 'Read plan.md and user comments',
         args: {
           feature: tool.schema.string().optional().describe('Feature name (defaults to detection or single feature)'),
@@ -1766,7 +1814,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_plan_approve: tool({
+      hive_plan_approve: tool('hive_plan_approve', {
         description: 'Approve plan for execution',
         args: {
           feature: tool.schema.string().optional().describe('Feature name (defaults to detection or single feature)'),
@@ -1784,7 +1832,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_tasks_sync: tool({
+      hive_tasks_sync: tool('hive_tasks_sync', {
         description: 'Generate tasks from approved plan',
         args: {
           feature: tool.schema.string().optional().describe('Feature name (defaults to detection or single feature)'),
@@ -1804,7 +1852,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_task_create: tool({
+      hive_task_create: tool('hive_task_create', {
         description: 'Create manual task (not from plan)',
         args: {
           name: tool.schema.string().describe('Task name'),
@@ -1819,7 +1867,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_task_update: tool({
+      hive_task_update: tool('hive_task_update', {
         description: 'Update task status or summary',
         args: {
           task: tool.schema.string().describe('Task folder name'),
@@ -1838,7 +1886,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_worktree_start: tool({
+      hive_worktree_start: tool('hive_worktree_start', {
         description: 'Create worktree and begin work on pending/in-progress task. Spawns Forager worker automatically.',
         args: {
           task: tool.schema.string().describe('Task folder name'),
@@ -1849,7 +1897,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_worktree_batch: tool({
+      hive_worktree_batch: tool('hive_worktree_batch', {
         description: 'Start multiple independent tasks in parallel. Use when tasks have no dependencies on each other. Check hive_status first to find runnable tasks.',
         args: {
           tasks: tool.schema.array(tool.schema.string()).describe('Array of task folder names to start in parallel'),
@@ -1950,7 +1998,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_worktree_create: tool({
+      hive_worktree_create: tool('hive_worktree_create', {
         description: 'Resume a blocked task in its existing worktree. Spawns Forager worker automatically.',
         args: {
           task: tool.schema.string().describe('Task folder name'),
@@ -1963,7 +2011,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_worktree_commit: tool({
+      hive_worktree_commit: tool('hive_worktree_commit', {
         description: 'Complete task: commit changes to branch, write report. Supports blocked/failed/partial status for worker communication. Returns JSON with ok/terminal semantics for worker control flow.',
         args: {
           task: tool.schema.string().describe('Task folder name'),
@@ -2158,7 +2206,7 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-      hive_worktree_discard: tool({
+      hive_worktree_discard: tool('hive_worktree_discard', {
         description: 'Abort task: discard changes, reset status',
         args: {
           task: tool.schema.string().describe('Task folder name'),
@@ -2176,7 +2224,7 @@ Expand your Discovery section and try again.`;
       }),
 
 
-      hive_merge: tool({
+      hive_merge: tool('hive_merge', {
         description: 'Merge completed task branch into current branch (explicit integration)',
         args: {
           task: tool.schema.string().describe('Task folder name to merge'),
@@ -2205,7 +2253,7 @@ Expand your Discovery section and try again.`;
       }),
 
       // Context Tools
-      hive_context_write: tool({
+      hive_context_write: tool('hive_context_write', {
         description: 'Write a context file for the feature. Context files store persistent notes, decisions, and reference material.',
         args: {
           name: tool.schema.string().describe('Context file name (e.g., "decisions", "architecture", "notes")'),
@@ -2222,7 +2270,7 @@ Expand your Discovery section and try again.`;
       }),
 
       // Status Tool
-      hive_status: tool({
+      hive_status: tool('hive_status', {
         description: 'Get comprehensive status of a feature including plan, tasks, and context. Returns JSON with all relevant state for resuming work.',
         args: {
           feature: tool.schema.string().optional().describe('Feature name (defaults to active)'),
@@ -2373,7 +2421,7 @@ Expand your Discovery section and try again.`;
       }),
 
       // AGENTS.md Tool
-      hive_agents_md: tool({
+      hive_agents_md: tool('hive_agents_md', {
         description: 'Initialize or sync AGENTS.md. init: scan codebase and generate (preview only). sync: propose updates from feature contexts. apply: write approved content to disk.',
         args: {
           action: tool.schema.enum(['init', 'sync', 'apply']).describe('Action to perform'),
@@ -2410,21 +2458,19 @@ Expand your Discovery section and try again.`;
         },
       }),
 
-    },
+    };
 
-    command: {
-      hive: {
-        description: "Create a new feature: /hive <feature-name>",
-        async run(args: string) {
-          const name = args.trim();
-          if (!name) return "Usage: /hive <feature-name>";
-          return `Create feature "${name}" using hive_feature_create tool.`;
-        },
-      },
-    },
+    // ---------------------------------------------------------------------------
+    // V2 registrations — tools, agents, MCP, commands
+    // ---------------------------------------------------------------------------
 
-    // Config hook - merge agents into opencodeConfig.agent
-    config: async (opencodeConfig: Record<string, unknown>) => {
+    // Tools (was the returned `tool` map) → ctx.tool.transform
+    await ctx.tool.transform((editor) => {
+      for (const definition of Object.values(toolMap)) {
+        editor.add(definition as never);
+      }
+    });
+
       function agentTools(allowed: string[]): Record<string, boolean> {
         const allHiveTools = [
           'hive_feature_create', 'hive_feature_complete',
@@ -2685,70 +2731,91 @@ Use these tools when the task matches their purpose. They are available as regul
         }
       }
 
-      // Merge agents into opencodeConfig.agent
-      const configAgent = (opencodeConfig.agent ??= {}) as Record<string, unknown>;
-      
-      // Clean up old single-word agent names
-      delete configAgent.hive;
-      delete configAgent.architect;
-      delete configAgent.swarm;
-      delete configAgent.scout;
-      delete configAgent.forager;
-      delete configAgent.hygienic;
-      delete configAgent.receiver;
-      // Clean up old kebab-case names (in case they exist)
-      delete configAgent['hive'];
-      delete configAgent['architect-planner'];
-      delete configAgent['swarm-orchestrator'];
-      delete configAgent['scout-researcher'];
-      delete configAgent['forager-worker'];
-      delete configAgent['hygienic-reviewer'];
-      
-      // Demote built-in OpenCode agents to subagent mode
-      // This makes zetta the primary agent instead of the default build/plan
-      // IMPORTANT: We MUST create entries for these agents if they don't exist
-      // because OpenCode's built-in agents might not be in the config yet
-      const opencodeBuiltInAgents = ['build', 'plan', 'triage', 'docs', 'ask', 'claude-code'];
-      for (const agentName of opencodeBuiltInAgents) {
-        if (!configAgent[agentName]) {
-          configAgent[agentName] = {};
-        }
-        (configAgent[agentName] as Record<string, unknown>).mode = 'subagent';
-      }
-      
-      // Demote all our agents except primary
-      for (const [agentName, agentConfig] of Object.entries(allAgents)) {
-        if (agentName !== primaryAgent && agentConfig && typeof agentConfig === 'object') {
-          (agentConfig as Record<string, unknown>).mode = 'subagent';
-        }
-      }
-      
-      Object.assign(configAgent, allAgents);
+      // === V2 agent bootstrap =============================================
+      // OpenCode V2 discovers agent definitions from `.opencode/agents/*.md`
+      // (plugin agent transforms cannot *add* agents, only update existing
+      // ones). The plugin writes generated definition files at setup, reloads
+      // the agent catalog, then wires the default agent + demotions.
 
-      // CRITICAL: Set default agent - this is what makes zetta the primary agent
-      // Without this, OpenCode uses its own default agent
-      (opencodeConfig as Record<string, unknown>).default_agent = primaryAgent;
+      await writeAgentDefinitions({ directory, primaryAgent, agents: allAgents as Record<string, RuntimeAgentConfig> });
+      try {
+        await ctx.agent.reload();
+      } catch {
+        // 0-risk: agent catalog reload is best-effort
+      }
 
-      // Merge built-in MCP servers (OMO-style remote endpoints)
-      // Only add MCPs that user hasn't already configured in their opencode.json
-      const configMcp = opencodeConfig.mcp as Record<string, unknown> | undefined;
-      const mcpToAdd = builtinMcps;
-      
-      if (!configMcp) {
-        // No MCP config at all - use all built-in MCPs
-        opencodeConfig.mcp = mcpToAdd;
-      } else {
-        // User has MCP config - only add MCPs they haven't configured
-        // This preserves user's MCP settings (like grep_app, ast_grep from opencode.json)
-        for (const [name, config] of Object.entries(mcpToAdd)) {
-          if (!(name in configMcp)) {
-            configMcp[name] = config;
+      await ctx.agent.transform((agentEditor) => {
+        // Make queen the default primary agent. Built-in agents stay untouched:
+        // `opencode run` resolves its default session to `build`, and demoting
+        // it makes every default session fail with AgentNotFoundError.
+        // (Same behavior as V1: zetta is added, builtins remain usable.)
+        try {
+          agentEditor.default(primaryAgent);
+        } catch {
+          // 0-risk: default selection failure → OpenCode keeps its built-in default
+        }
+      });
+
+      // Per-agent hive-tool gating. V1 shipped a `tools` deny map on each
+      // agent config; V2 agent definitions carry no tool map, so the session
+      // 'context' hook filters hive tools by the current agent instead.
+      // Custom agents inherit the tool map of the builtin they are based on.
+      const agentAllowedTools: Record<string, string[]> = {
+        'scout-researcher': ['hive_plan_read', 'hive_context_write', 'hive_status', 'hive_skill'],
+        'forager-worker': ['hive_plan_read', 'hive_worktree_commit', 'hive_context_write', 'hive_skill'],
+        'hygienic-reviewer': ['hive_plan_read', 'hive_context_write', 'hive_status', 'hive_skill'],
+        'codebase-locator': ['hive_plan_read', 'hive_skill'],
+        'codebase-analyzer': ['hive_plan_read', 'hive_skill'],
+      };
+      for (const [customAgentName, customAgentConfig] of Object.entries(customAgentConfigs)) {
+        const baseAllowed = agentAllowedTools[customAgentConfig.baseAgent];
+        if (baseAllowed) agentAllowedTools[customAgentName] = baseAllowed;
+      }
+      await ctx.session.hook('context', (toolGateEvent) => {
+        const gateAgent = (toolGateEvent as { agent?: string }).agent;
+        const allowed = gateAgent ? agentAllowedTools[gateAgent] : undefined;
+        if (!allowed || !toolGateEvent.tools) return;
+        const gateTools = toolGateEvent.tools as Record<string, unknown>;
+        for (const toolName of Object.keys(gateTools)) {
+          if (toolName.startsWith('hive_') && !allowed.includes(toolName)) {
+            delete gateTools[toolName];
           }
         }
-      }
+      });
 
+      // Built-in MCP servers — only add those the user hasn't configured
+      await ctx.mcp.transform((mcpEditor) => {
+        for (const [name, config] of Object.entries(builtinMcps)) {
+          if (mcpEditor.get(name) === undefined) {
+            mcpEditor.set(name, toV2McpConfig(config) as never);
+          }
+        }
+      });
+
+      // /hive command — V2 commands register through ctx.command.transform
+      await ctx.command.transform((commandEditor) => {
+        commandEditor.add({
+          name: 'hive',
+          description: 'Create a new feature: /hive <feature-name>',
+          execute: async ({ sessionID }: { sessionID: string }) => {
+            try {
+              await ctx.session.synthetic({
+                sessionID,
+                text: 'Create a feature with hive_feature_create, then run discovery and write the plan with hive_plan_write.',
+              });
+            } catch {
+              // 0-risk: command execution must never throw
+            }
+          },
+        });
+      });
+
+      // Cleanup: dispose event subscriptions. V2 hook/transform registrations
+      // are cleaned up automatically when the plugin unloads.
+      return () => {
+        for (const cleanup of idleCleanup) cleanup();
+      };
     },
-  };
-};
+});
 
 export default plugin;

@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -139,7 +139,7 @@ function runAutoCr(args: string[]): { success: boolean; output?: string; error?:
 // Tool: auto_cr_status
 // ============================================================================
 
-export const autoCrStatusTool: ToolDefinition = tool({
+export const autoCrStatusTool: ToolDefinition = tool("auto_cr_status", {
   description: `Check auto-cr-cmd installation status.
 
 **Returns:**
@@ -191,7 +191,7 @@ Both names are detected automatically, including via npx.`,
 // Tool: auto_cr_scan
 // ============================================================================
 
-export const autoCrScanTool: ToolDefinition = tool({
+export const autoCrScanTool: ToolDefinition = tool("auto_cr_scan", {
   description: `Scan directory for code issues using auto-cr (SWC-based static analysis).
 
 **Parameters:**
@@ -287,7 +287,7 @@ auto_cr_scan({ path: "./src" })
 // Tool: auto_cr_diff
 // ============================================================================
 
-export const autoCrDiffTool: ToolDefinition = tool({
+export const autoCrDiffTool: ToolDefinition = tool("auto_cr_diff", {
   description: `Scan git diff output for code issues using auto-cr.
 
 **Use case:** Run in CI to check only changed files.
@@ -330,7 +330,7 @@ This tool requires git diff output piped via stdin.`,
 // Tool: auto_cr_rules
 // ============================================================================
 
-export const autoCrRulesTool: ToolDefinition = tool({
+export const autoCrRulesTool: ToolDefinition = tool("auto_cr_rules", {
   description: `List available auto-cr rules and their descriptions.
 
 **Returns:** All built-in rules with descriptions.`,

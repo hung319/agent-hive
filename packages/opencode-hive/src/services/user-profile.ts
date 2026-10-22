@@ -69,7 +69,7 @@ export class UserProfileService {
    * periodic analysis when analysisInterval is reached.
    * 0-risk: never throws.
    */
-  async onUserMessage(text: string): Promise<void> {
+  async onUserMessage(text: string, sessionID?: string): Promise<void> {
     // 0-risk guard
     if (!this.isEnabled()) return;
 
@@ -86,7 +86,7 @@ export class UserProfileService {
       const interval = this.config.analysisInterval ?? DEFAULT_ANALYSIS_INTERVAL;
       if (this.messageCount >= interval) {
         this.messageCount = 0;
-        await this.analyzeAndUpdate();
+        await this.analyzeAndUpdate(sessionID);
       }
     } catch (error) {
       // 0-risk: never throw
@@ -100,7 +100,7 @@ export class UserProfileService {
   /**
    * Run profile analysis and merge results.
    */
-  private async analyzeAndUpdate(): Promise<void> {
+  private async analyzeAndUpdate(sessionID?: string): Promise<void> {
     try {
       const { systemPrompt, userPrompt } = buildProfileAnalysisPrompt(this.recentMessages);
 
@@ -110,6 +110,7 @@ export class UserProfileService {
       }>({
         systemPrompt,
         userPrompt,
+        sessionID,
         expectedFields: ['preferences'],
       });
 

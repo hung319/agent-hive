@@ -407,24 +407,78 @@ describe('Compaction hook — no hive_status reinjection after compaction', () =
 
 describe('hive_worktree_commit error guidance — no out-of-surface tool references for Forager', () => {
   it('task_not_found nextAction does not reference hive_status', async () => {
+    // V2 harness: run plugin setup against a mock plugin context that captures
+    // tool registrations, then execute the tool directly with a V2 context.
     const { default: plugin } = await import('../index.js');
-    const repoRoot = path.resolve(import.meta.dir, '..', '..', '..', '..');
+
+    // Isolated project dir so agent bootstrap files and hive state don't leak
+    // into the repository checkout.
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hive-v2-test-'));
+    const added = new Map<string, any>();
+
     const ctx = {
-      directory: repoRoot,
-      worktree: repoRoot,
-      serverUrl: new URL('http://localhost:1'),
-      project: { id: 'test', worktree: repoRoot, time: { created: Date.now() } },
-      client: {} as any,
-      $: {} as any,
+      location: { directory: projectDir },
+      app: {},
+      permission: {} as any,
+      agent: {
+        transform: async (_update: unknown) => {},
+        reload: async () => {},
+      },
+      tool: {
+        transform: async (update: (editor: any) => void) => {
+          update({
+            add: (tool: any) => added.set(tool.name, tool),
+            get: () => undefined,
+            list: () => [],
+            namespace: () => {},
+          });
+        },
+        hook: async () => {},
+      },
+      session: {
+        hook: async () => {},
+        context: async () => [],
+        synthetic: async () => {},
+        generate: async () => ({ text: '' }),
+      },
+      shell: { hook: async () => {} },
+      event: {
+        // Empty event stream: the judge idle subscription loops over 0 events
+        subscribe: async (_input?: unknown) => [] as unknown[],
+      },
+      mcp: {
+        transform: async (update: (editor: any) => void) => {
+          update({ get: () => undefined, set: () => {}, list: () => [] });
+        },
+      },
+      command: {
+        transform: async (update: (editor: any) => void) => {
+          update({ add: () => {}, list: () => [], get: () => undefined });
+        },
+      },
     };
-    const hooks = await plugin(ctx as any);
-    const toolContext = { sessionID: 'sess_test', messageID: 'msg_test', agent: 'forager-worker', abort: new AbortController().signal };
-    const raw = await hooks.tool!.hive_worktree_commit.execute(
+
+    await (plugin as unknown as { setup: (ctx: unknown) => Promise<unknown> }).setup(ctx as any);
+
+    const tool = added.get('hive_worktree_commit');
+    expect(tool).toBeDefined();
+
+    const toolContext = {
+      sessionID: 'sess_test',
+      messageID: 'msg_test',
+      id: 'call_test',
+      agent: 'forager-worker',
+      signal: new AbortController().signal,
+      progress: async () => {},
+    };
+    const raw = await tool.execute(
       { task: 'nonexistent-task', summary: 'test', status: 'completed', feature: 'nonexistent-feature' },
       toolContext,
     );
-    const result = JSON.parse(raw as string) as { reason?: string; nextAction?: string };
+    const result = JSON.parse((raw as { content?: string }).content ?? '{}') as { reason?: string; nextAction?: string };
     expect(result.reason).toBe('task_not_found');
     expect(result.nextAction).not.toMatch(/hive_status/);
+
+    fs.rmSync(projectDir, { recursive: true, force: true });
   }, 15000);
 });

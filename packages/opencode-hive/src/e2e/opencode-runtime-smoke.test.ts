@@ -14,9 +14,12 @@ import {
   createOpencodeServer,
   type Config as OpencodeConfig,
 } from "@opencode-ai/sdk";
-import plugin from "../index";
+import {
+  runV2PluginSetup,
+  execTool,
+  createV2ToolContext,
+} from "../__tests__/v2-harness.js";
 import { buildCompactionPrompt } from "../utils/compaction-prompt.js";
-import type { PluginInput } from "@opencode-ai/plugin";
 
 const EXPECTED_TOOLS = [
   "hive_feature_create",
@@ -361,20 +364,6 @@ describe.skip("e2e: OpenCode runtime loads opencode-hive", () => {
 
 const TEST_ROOT_BASE_LOOP = "/tmp/hive-e2e-loop-mitigation";
 
-function createStubShellForLoop(): PluginInput["$"] {
-  const fn = ((..._args: unknown[]) => {
-    throw new Error("shell not available in this test");
-  }) as unknown as PluginInput["$"];
-  return Object.assign(fn, {
-    braces(pattern: string) { return [pattern]; },
-    escape(input: string) { return input; },
-    env() { return fn; },
-    cwd() { return fn; },
-    nothrow() { return fn; },
-    throws() { return fn; },
-  });
-}
-
 describe("e2e: Forager compaction loop mitigation (in-process)", () => {
   let testRoot: string;
   let originalHome: string | undefined;
@@ -411,35 +400,23 @@ describe("e2e: Forager compaction loop mitigation (in-process)", () => {
   });
 
   it("system transform does not reintroduce broad startup instruction after compaction", async () => {
-    const { createOpencodeClient: mkClient } = await import("@opencode-ai/sdk");
-    const OPENCODE_CLIENT = mkClient({ baseUrl: "http://localhost:1" }) as unknown as PluginInput["client"];
-
     execSync("git init", { cwd: testRoot });
     execSync('git config user.email "test@example.com"', { cwd: testRoot });
     execSync('git config user.name "Test"', { cwd: testRoot });
 
-    const ctx: PluginInput = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: { id: "test", worktree: testRoot, time: { created: Date.now() } },
-      client: OPENCODE_CLIENT,
-      $: createStubShellForLoop(),
-    };
-    const hooks = await plugin(ctx);
+    const harness = await runV2PluginSetup({ directory: testRoot });
 
-    const output = { system: [] as string[] };
-    await hooks["experimental.chat.system.transform"]?.({ agent: "forager-worker" }, output);
+    // Was V1 hooks["experimental.chat.system.transform"] → V2 session 'context'
+    // hook (first registered); entries are { type: "text", text } chunks.
+    const system: Array<{ type: "text"; text: string }> = [];
+    await harness.sessionHooks.get("context")?.[0]?.({ agent: "forager-worker", system } as never);
 
-    const joined = output.system.join("\n");
+    const joined = system.map((entry) => entry.text).join("\n");
     expect(joined).not.toMatch(/use hive_status to check feature state before starting work/i);
     expect(joined).not.toMatch(/use hive_plan_read to see plan comments/i);
   });
 
   it("compacted forager flow reaches commit-capable step without hive_status stall", async () => {
-    const { createOpencodeClient: mkClient } = await import("@opencode-ai/sdk");
-    const OPENCODE_CLIENT = mkClient({ baseUrl: "http://localhost:1" }) as unknown as PluginInput["client"];
-
     execSync("git init", { cwd: testRoot });
     execSync('git config user.email "test@example.com"', { cwd: testRoot });
     execSync('git config user.name "Test"', { cwd: testRoot });
@@ -447,18 +424,10 @@ describe("e2e: Forager compaction loop mitigation (in-process)", () => {
     execSync("git add README.md", { cwd: testRoot });
     execSync('git commit -m "init"', { cwd: testRoot });
 
-    const ctx: PluginInput = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: { id: "test", worktree: testRoot, time: { created: Date.now() } },
-      client: OPENCODE_CLIENT,
-      $: createStubShellForLoop(),
-    };
-    const hooks = await plugin(ctx);
-    const toolContext = { sessionID: "sess_compaction_loop", messageID: "msg_test", agent: "forager-worker", abort: new AbortController().signal };
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    const toolContext = createV2ToolContext("sess_compaction_loop");
 
-    await hooks.tool!.hive_feature_create.execute({ name: "compaction-test-feature" }, toolContext);
+    await execTool(harness, "hive_feature_create", { name: "compaction-test-feature" }, toolContext);
 
     const plan = `# Compaction Test Feature
 
@@ -472,11 +441,13 @@ A: Yes, this is a regression test for the compaction loop mitigation. Validates 
 ### 1. Compaction Task
 Test compaction resume flow.
 `;
-    await hooks.tool!.hive_plan_write.execute({ content: plan, feature: "compaction-test-feature" }, toolContext);
-    await hooks.tool!.hive_plan_approve.execute({ feature: "compaction-test-feature" }, toolContext);
-    await hooks.tool!.hive_tasks_sync.execute({ feature: "compaction-test-feature" }, toolContext);
+    await execTool(harness, "hive_plan_write", { content: plan, feature: "compaction-test-feature" }, toolContext);
+    await execTool(harness, "hive_plan_approve", { feature: "compaction-test-feature" }, toolContext);
+    await execTool(harness, "hive_tasks_sync", { feature: "compaction-test-feature" }, toolContext);
 
-    const worktreeRaw = await hooks.tool!.hive_worktree_start.execute(
+    const worktreeRaw = await execTool(
+      harness,
+      "hive_worktree_start",
       { feature: "compaction-test-feature", task: "01-compaction-task" },
       toolContext,
     );
@@ -486,7 +457,9 @@ Test compaction resume flow.
     const worktreePath = worktreeResult.worktreePath!;
     fs.writeFileSync(path.join(worktreePath, "change.txt"), "compaction resume test\n");
 
-    const commitRaw = await hooks.tool!.hive_worktree_commit.execute(
+    const commitRaw = await execTool(
+      harness,
+      "hive_worktree_commit",
       {
         feature: "compaction-test-feature",
         task: "01-compaction-task",
@@ -503,27 +476,22 @@ Test compaction resume flow.
   });
 
   it("compaction hook output appended to session context does not contain hive_status", async () => {
-    const { createOpencodeClient: mkClient } = await import("@opencode-ai/sdk");
-    const OPENCODE_CLIENT = mkClient({ baseUrl: "http://localhost:1" }) as unknown as PluginInput["client"];
-
     execSync("git init", { cwd: testRoot });
     execSync('git config user.email "test@example.com"', { cwd: testRoot });
     execSync('git config user.name "Test"', { cwd: testRoot });
 
-    const ctx: PluginInput = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: { id: "test", worktree: testRoot, time: { created: Date.now() } },
-      client: OPENCODE_CLIENT,
-      $: createStubShellForLoop(),
-    };
-    const hooks = await plugin(ctx);
+    const harness = await runV2PluginSetup({ directory: testRoot });
 
-    const compactionOutput = { context: [] as string[], prompt: undefined as string | undefined };
-    await hooks["experimental.session.compacting"]?.({ sessionID: "sess_compaction" }, compactionOutput);
+    // Was V1 hooks["experimental.session.compacting"] → V2 session 'compaction'
+    // hook; injected context entries are { type: "text", text } chunks.
+    const compactionSystem: Array<{ type: "text"; text: string }> = [];
+    await harness.sessionHooks.get("compaction")?.[0]?.({
+      sessionID: "sess_compaction",
+      system: compactionSystem,
+      messages: [],
+    } as never);
 
-    const joined = compactionOutput.context.join("\n");
+    const joined = compactionSystem.map((entry) => entry.text).join("\n");
     expect(joined).not.toMatch(/hive_status/);
     expect(joined).toMatch(/continue/i);
     expect(joined).toMatch(/worker-prompt\.md|task spec|spec file/i);

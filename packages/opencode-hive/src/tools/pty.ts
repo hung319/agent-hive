@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition, type ToolContext } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition, type ToolContext } from '../compat/v2-tool.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getHiveNodeModulesPath } from '../utils/tool-installer.js';
@@ -203,7 +203,7 @@ async function listPty(_args: PtyListArgs): Promise<string> {
   return output;
 }
 
-export const ptyStartTool: ToolDefinition = tool({
+export const ptyStartTool: ToolDefinition = tool("pty_start", {
   description: "Start a new PTY (pseudo-terminal) session for running interactive processes in background. Requires bun-pty or opencode-pty plugin.",
   args: {
     command: tool.schema.string().describe("Command to execute in the PTY"),
@@ -215,7 +215,7 @@ export const ptyStartTool: ToolDefinition = tool({
   },
 });
 
-export const ptySendTool: ToolDefinition = tool({
+export const ptySendTool: ToolDefinition = tool("pty_send", {
   description: "Send input to a running PTY session.",
   args: {
     id: tool.schema.string().describe("PTY session ID"),
@@ -226,7 +226,7 @@ export const ptySendTool: ToolDefinition = tool({
   },
 });
 
-export const ptyReadTool: ToolDefinition = tool({
+export const ptyReadTool: ToolDefinition = tool("pty_read", {
   description: "Read output from a PTY session.",
   args: {
     id: tool.schema.string().describe("PTY session ID"),
@@ -237,7 +237,7 @@ export const ptyReadTool: ToolDefinition = tool({
   },
 });
 
-export const ptyKillTool: ToolDefinition = tool({
+export const ptyKillTool: ToolDefinition = tool("pty_kill", {
   description: "Kill/terminate a PTY session.",
   args: {
     id: tool.schema.string().describe("PTY session ID to kill"),
@@ -247,7 +247,7 @@ export const ptyKillTool: ToolDefinition = tool({
   },
 });
 
-export const ptyListTool: ToolDefinition = tool({
+export const ptyListTool: ToolDefinition = tool("pty_list", {
   description: "List all active PTY sessions.",
   args: {},
   async execute(_args: PtyListArgs, _context: ToolContext) {

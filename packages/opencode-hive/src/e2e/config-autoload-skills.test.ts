@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "fs";
 import * as path from "path";
-import { createOpencodeClient } from "@opencode-ai/sdk";
-import plugin from "../index";
+import {
+  runV2PluginSetup,
+  agentPromptProxy,
+} from "../__tests__/v2-harness.js";
 import { BUILTIN_SKILLS } from "../skills/registry.generated.js";
 
 /**
@@ -32,16 +34,24 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
-const OPENCODE_CLIENT = createOpencodeClient({ baseUrl: "http://localhost:1" });
-
 const TEST_ROOT_BASE = "/tmp/hive-config-autoload-skills-test";
 
-function createProject(worktree: string) {
-  return {
-    id: "test",
-    worktree,
-    time: { created: Date.now() },
-  };
+
+/**
+ * V2 port: agents are generated into .opencode/agents/<id>.md whose body is
+ * the agent prompt. This rebuilds the V1 opencodeConfig.agent record the
+ * `hooks.config` hook used to mutate.
+ */
+function agentPromptsFromMd(harness: V2Harness): Record<string, { prompt: string }> {
+  const dir = path.join(harness.projectDir, ".opencode", "agents");
+  const record: Record<string, { prompt: string }> = {};
+  for (const file of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
+    if (!file.endsWith(".md")) continue;
+    const id = file.replace(/\.md$/, "");
+    const raw = fs.readFileSync(path.join(dir, file), "utf-8");
+    record[id] = { prompt: raw.split("---").slice(2).join("---") };
+  }
+  return record;
 }
 
 describe("config hook autoLoadSkills injection", () => {
@@ -89,17 +99,9 @@ describe("config hook autoLoadSkills injection", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     // Skills are referenced via hive_skill("...") - on-demand loading
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
@@ -152,17 +154,9 @@ describe("config hook autoLoadSkills injection", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     expect(opencodeConfig.agent["forager-ui"]).toBeDefined();
     expect(opencodeConfig.agent["reviewer-security"]).toBeDefined();
@@ -198,17 +192,9 @@ describe("config hook autoLoadSkills injection", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     // forager-worker should have brainstorming (user-configured) AND default skills
     const foragerPrompt = opencodeConfig.agent["forager-worker"]?.prompt as string;
@@ -239,17 +225,9 @@ describe("config hook autoLoadSkills injection", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     // hive should NOT have parallel-exploration (it's disabled globally)
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
@@ -276,18 +254,9 @@ describe("config hook autoLoadSkills injection", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    // Should not throw, just warn
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     // hive should still be defined
     expect(opencodeConfig.agent["zetta"]).toBeDefined();
@@ -308,17 +277,9 @@ describe("config hook autoLoadSkills injection", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     // zetta should have parallel-exploration embedded (full template) in dedicated mode
     const zettaPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
@@ -351,17 +312,9 @@ describe("config hook autoLoadSkills injection", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     // Skills are referenced via hive_skill("name") - on-demand loading
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
@@ -389,36 +342,33 @@ describe("config hook autoLoadSkills injection", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
+    const harness = await runV2PluginSetup({ directory: testRoot });
 
     // Skills are referenced via hive_skill("...") in the prompt - on-demand loading
     const brainstormingSkillRef = `\`hive_skill("brainstorming")\``;
     const parallelExplorationSkillRef = `\`hive_skill("parallel-exploration")\``;
 
-    // Call system.transform WITH agent specified
-    const outputWithAgent = { system: [] as string[] };
-    await hooks["experimental.chat.system.transform"]?.({ agent: "zetta" }, outputWithAgent);
-    const joinedWithAgent = outputWithAgent.system.join("\n");
+    // V2: system.transform became the session 'context' hook; entries are
+    // pushed as { type: "text", text } chunks.
+    const runContextHook = (agent?: string) => {
+      const system: Array<{ type: "text"; text: string }> = [];
+      const handler = harness.sessionHooks.get("context")?.[0];
+      handler?.({ agent, system } as never);
+      return system.map((entry) => entry.text).join("\n");
+    };
 
-    // Skills should NOT be full templates in system.transform output (legacy path removed)
+    // Call context hook WITH agent specified
+    const joinedWithAgent = runContextHook("zetta");
+
+    // Skills should NOT be full templates in the context hook output (legacy path removed)
     // (Builtin skills are in the prompt template via hive_skill("...") references)
     expect(joinedWithAgent).not.toContain("## Overview"); // Part of skill templates
 
     // HIVE_SYSTEM_PROMPT should still be there
     expect(joinedWithAgent).toContain("## Hive — Active Session");
 
-    // Call system.transform WITHOUT agent (simulates runtime scenario)
-    const outputWithoutAgent = { system: [] as string[] };
-    await hooks["experimental.chat.system.transform"]?.({}, outputWithoutAgent);
-    const joinedWithoutAgent = outputWithoutAgent.system.join("\n");
+    // Call context hook WITHOUT agent (simulates runtime scenario)
+    const joinedWithoutAgent = runContextHook();
 
     // Skills should also NOT be full templates when agent is missing
     expect(joinedWithoutAgent).not.toContain("## Overview");
@@ -427,8 +377,8 @@ describe("config hook autoLoadSkills injection", () => {
     expect(joinedWithoutAgent).toContain("## Hive — Active Session");
 
     // Verify skills ARE referenced in the config hook prompt (on-demand)
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toContain(brainstormingSkillRef);
     expect(hiveMasterPrompt).toContain(parallelExplorationSkillRef);
@@ -487,17 +437,9 @@ describe("file-based skill fallback in autoLoadSkills", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();
@@ -530,17 +472,9 @@ describe("file-based skill fallback in autoLoadSkills", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();
@@ -573,17 +507,9 @@ describe("file-based skill fallback in autoLoadSkills", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();
@@ -616,17 +542,9 @@ describe("file-based skill fallback in autoLoadSkills", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();
@@ -654,18 +572,9 @@ describe("file-based skill fallback in autoLoadSkills", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    // Should not throw
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();
@@ -706,17 +615,9 @@ describe("file-based skill fallback in autoLoadSkills", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();
@@ -760,17 +661,9 @@ describe("file-based skill fallback in autoLoadSkills", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();
@@ -818,17 +711,9 @@ describe("file-based skill fallback in autoLoadSkills", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();
@@ -867,18 +752,9 @@ describe("file-based skill fallback in autoLoadSkills", () => {
       }),
     );
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL("http://localhost:1"),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
-
-    // Should NOT throw even with invalid IDs
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();

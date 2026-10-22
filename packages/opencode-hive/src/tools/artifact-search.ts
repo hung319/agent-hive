@@ -1,4 +1,4 @@
-import { tool, type ToolDefinition, type ToolContext } from "@opencode-ai/plugin";
+import { tool, type ToolDefinition, type ToolContext } from '../compat/v2-tool.js';
 
 /**
  * artifact_search tool
@@ -81,7 +81,7 @@ Note: This tool requires the artifact-index npm package to be installed globally
   }
 }
 
-export const artifactSearchTool: ToolDefinition = tool({
+export const artifactSearchTool: ToolDefinition = tool("artifact_search", {
   description:
     "Search through indexed artifacts (code snippets, documents) stored in SQLite. Requires artifact-index npm package to be installed. Use for finding previously indexed code or documentation.",
   args: {

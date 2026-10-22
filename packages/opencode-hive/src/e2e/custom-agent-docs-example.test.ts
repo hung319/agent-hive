@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { createOpencodeClient } from '@opencode-ai/sdk';
-import plugin from '../index';
+import { runV2PluginSetup, type V2Harness } from '../__tests__/v2-harness.js';
 
-const OPENCODE_CLIENT = createOpencodeClient({ baseUrl: 'http://localhost:1' });
 const TEST_ROOT_BASE = '/tmp/hive-custom-agent-docs-example-test';
 const README_PATH = path.resolve(import.meta.dir, '..', '..', 'README.md');
 
@@ -28,15 +26,26 @@ const publishedExample = {
   },
 };
 
-function createProject(worktree: string) {
-  return {
-    id: 'test',
-    worktree,
-    time: { created: Date.now() },
-  };
+/**
+ * V2 port: agents are generated into `.opencode/agents/<id>.md`. Read the
+ * frontmatter fields (`model`, `temperature`) and the body (= prompt).
+ */
+function agentMd(harness: V2Harness, id: string): string | undefined {
+  const file = path.join(harness.projectDir, '.opencode', 'agents', `${id}.md`);
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : undefined;
 }
 
-describe('e2e: published custom-agent docs example', () => {
+function frontmatterField(md: string, key: string): string | undefined {
+  const frontmatter = md.split('---')[1] ?? '';
+  const m = frontmatter.match(new RegExp(`^\\s*${key}:\\s*(.*?)\\s*$`, 'm'));
+  return m ? m[1] : undefined;
+}
+
+function agentBody(md: string): string {
+  return md.split('---').slice(2).join('---');
+}
+
+describe('e2e: published custom-agent docs example (V2)', () => {
   let testRoot: string;
   let originalHome: string | undefined;
   let originalHiveDisable: string | undefined;
@@ -44,8 +53,8 @@ describe('e2e: published custom-agent docs example', () => {
   beforeEach(() => {
     originalHome = process.env.HOME;
     originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
-    process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
-    testRoot = fs.mkdtempSync(path.join("/tmp", "hive-custom-agent-"));
+    process.env.HIVE_DISABLE_AUTO_INSTALL = '1';
+    testRoot = fs.mkdtempSync(path.join('/tmp', 'hive-custom-agent-'));
     process.env.HOME = testRoot;
   });
 
@@ -68,37 +77,36 @@ describe('e2e: published custom-agent docs example', () => {
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     fs.writeFileSync(configPath, JSON.stringify(publishedExample, null, 2));
 
-    const ctx: any = {
-      directory: testRoot,
-      worktree: testRoot,
-      serverUrl: new URL('http://localhost:1'),
-      project: createProject(testRoot),
-      client: OPENCODE_CLIENT,
-    };
+    const harness = await runV2PluginSetup({ directory: testRoot });
 
-    const hooks = await plugin(ctx);
-    const opencodeConfig: any = { agent: {} };
-    await hooks.config!(opencodeConfig);
+    // Built-in agent overrides are honored: hygienic-reviewer's model override
+    // lands in its generated definition.
+    const hygienic = agentMd(harness, 'hygienic-reviewer')!;
+    expect(hygienic).toBeTruthy();
+    expect(frontmatterField(hygienic, 'model')).toBe('github-copilot/gpt-5.2-codex');
 
-    expect(opencodeConfig.agent['forager-worker']?.variant).toBe('medium');
-    expect(opencodeConfig.agent['hygienic-reviewer']?.model).toBe('github-copilot/gpt-5.2-codex');
+    // Custom subagents are registered as generated agent definitions.
+    const foragerUi = agentMd(harness, 'forager-ui');
+    const reviewerSecurity = agentMd(harness, 'reviewer-security');
+    expect(foragerUi).toBeTruthy();
+    expect(reviewerSecurity).toBeTruthy();
 
-    const foragerUi = opencodeConfig.agent['forager-ui'];
-    const reviewerSecurity = opencodeConfig.agent['reviewer-security'];
-    expect(foragerUi).toBeDefined();
-    expect(reviewerSecurity).toBeDefined();
+    // V2 model refs merge variant into `provider/model#variant`.
+    expect(frontmatterField(foragerUi!, 'model')).toBe('anthropic/claude-sonnet-4-20250514#high');
+    // Temperature renders into the agent md frontmatter (V2-supported field).
+    expect(Number(frontmatterField(foragerUi!, 'temperature'))).toBe(0.2);
+    expect(frontmatterField(foragerUi!, 'description')).toBe(
+      JSON.stringify('Use for UI-heavy implementation tasks.'),
+    );
 
-    expect(foragerUi.model).toBe('anthropic/claude-sonnet-4-20250514');
-    expect(foragerUi.temperature).toBe(0.2);
-    expect(foragerUi.variant).toBe('high');
-    expect(foragerUi.description).toBe('Use for UI-heavy implementation tasks.');
+    // reviewer-security inherits the base agent's model + default temperature.
+    expect(frontmatterField(reviewerSecurity!, 'model')).toBe('github-copilot/gpt-5.2-codex');
+    expect(Number(frontmatterField(reviewerSecurity!, 'temperature'))).toBe(0.3);
+    expect(frontmatterField(reviewerSecurity!, 'description')).toBe(
+      JSON.stringify('Use for security-focused review passes.'),
+    );
 
-    expect(reviewerSecurity.model).toBe('github-copilot/gpt-5.2-codex');
-    expect(reviewerSecurity.temperature).toBe(0.3);
-    expect(reviewerSecurity.variant).toBeUndefined();
-    expect(reviewerSecurity.description).toBe('Use for security-focused review passes.');
-
-    const zettaPrompt = opencodeConfig.agent['zetta']?.prompt as string;
+    const zettaPrompt = agentBody(agentMd(harness, 'zetta')!);
     expect(zettaPrompt).toContain('## Configured Custom Subagents');
     expect(zettaPrompt).toContain('`forager-ui`');
     expect(zettaPrompt).toContain('`reviewer-security`');

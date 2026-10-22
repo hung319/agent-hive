@@ -123,7 +123,7 @@ export class HiddenJudgeService {
    */
   private async runLLMJudge(params: EvaluateParams): Promise<JudgeEvaluation | null> {
     // 0-risk guard
-    if (!params.client?.session?.create || !params.client?.session?.prompt) {
+    if (!params.client?.session?.create || !params.client?.session?.generate) {
       return null; // Hidden sessions not available — skip LLM judge
     }
 
@@ -157,23 +157,18 @@ export class HiddenJudgeService {
 
       const systemPrompt = buildJudgeSystemPrompt();
 
-      // Run judge in hidden session
-      const response = await params.client.session.prompt({
-        path: { id: judgeSessionId },
-        body: {
-          parts: [
-            { type: 'text' as const, text: systemPrompt, synthetic: true as const },
-            { type: 'text' as const, text: userPrompt },
-          ],
-          noReply: true as const,
-        },
+      // Run judge as a transient generate call inside the hidden session
+      // (V2 session.generate returns `{ text }` and does not pollute history)
+      const response = await params.client.session.generate({
+        sessionID: judgeSessionId,
+        prompt: `${systemPrompt}\n\n${userPrompt}`,
       });
 
-      if (!response?.body?.parts?.[0]?.text) {
+      if (!response?.text) {
         return null;
       }
 
-      const parsed = parseJudgeResponse(response.body.parts[0].text);
+      const parsed = parseJudgeResponse(response.text);
       if (!parsed) return null;
 
       return {
@@ -200,7 +195,7 @@ export class HiddenJudgeService {
     evaluation: JudgeEvaluation,
   ): Promise<void> {
     // 0-risk guard
-    if (!client?.session?.prompt) return;
+    if (!client?.session?.synthetic) return;
 
     try {
       // Increment retry count
@@ -220,18 +215,9 @@ export class HiddenJudgeService {
         '</judge_feedback>',
       ].join('\n');
 
-      await client.session.prompt({
-        path: { id: sessionId },
-        body: {
-          parts: [
-            {
-              type: 'text' as const,
-              text: feedbackMessage,
-              synthetic: true as const,
-            },
-          ],
-          noReply: true as const,
-        },
+      await client.session.synthetic({
+        sessionID: sessionId,
+        text: feedbackMessage,
       });
     } catch (error) {
       console.warn(
