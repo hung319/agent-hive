@@ -152,7 +152,9 @@ export class DockerSandboxService {
    */
   static isDockerAvailable(): boolean {
     try {
-      execSync('docker info', { stdio: 'ignore' });
+      // Bounded so an unresponsive daemon cannot block the caller (and CI)
+      // indefinitely; a timeout is treated as "Docker unavailable".
+      execSync('docker info', { stdio: 'ignore', timeout: 3000 });
       return true;
     } catch {
       return false;
