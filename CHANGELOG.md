@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-23
+- Fix: npm install báo `PluginModule.LoadError: Plugin entrypoint not found` khi cấu hình `plugins: ["@hung319/opencode-hive"]` — `exports["."]` trỏ `./index.js`, nhưng shim này không nằm trong `files` nên không được publish, còn build thật nằm ở `dist/index.js`; đổi `exports["."]` sang `./dist/index.js` kèm condition `types`
+- Fix: thêm `"./package.json"` vào `exports` để công cụ đọc metadata không bị chặn bởi exports map
+- Verify: `npm pack` → cài tarball vào project sạch → `import('@hung319/opencode-hive')` trả `id: "opencode-hive"`; opencode v2.1.3 nạp plugin từ `dist/index.js`
+
 ## [2.0.0] - 2026-10-22
 - Breaking: port toàn bộ plugin sang **OpenCode V2 plugin API** — bỏ hỗ trợ OpenCode V1: `Plugin.define({ id, setup(ctx) → cleanup })`
   - Hooks mapping: `experimental.chat.system.transform` → session `context` hook (system injection + per-agent hive-tool gate); `experimental.session.compacting` → session `compaction` hook; per-agent tools deny map → context-hook gating; tool executes → compat layer `(args, v2Context)` với kết quả `{content}`

@@ -1,6 +1,6 @@
 {
   "name": "@hung319/opencode-hive",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "description": "OpenCode plugin for Agent Hive - 6 agents, 17 tools, 14 skills",
   "license": "MIT WITH Commons-Clause",
@@ -79,6 +79,10 @@
     "README.md"
   ],
   "exports": {
-    ".": "./index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   }
 }
