@@ -131,7 +131,7 @@ describe("agentMode gating (V2 bootstrap)", () => {
     expect(zettaPrompt).toContain("reviewer-security");
   });
 
-  it("keeps built-in agents (build, plan) untouched and registers zetta as primary default", async () => {
+  it("demotes built-in build/plan to subagents and registers zetta as primary default", async () => {
     const configPath = path.join(testRoot, ".config", "opencode", "agent_hive.json");
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     fs.writeFileSync(
@@ -143,13 +143,29 @@ describe("agentMode gating (V2 bootstrap)", () => {
 
     const harness = await runV2PluginSetup({ directory: testRoot });
 
-    // V2 decision: built-in agents are NO LONGER demoted to subagent mode.
-    // Demoting `build`/`plan` breaks `opencode run` (AgentNotFoundError, exit=1):
-    // the plugin only sets the primary default via agentEditor.default("zetta").
+    // V1 parity: `build` and `plan` are demoted so zetta is the only
+    // user-facing primary agent. They are updated in the agent catalog, not
+    // written as definition files.
     const agentFile = (id: string) =>
       fs.existsSync(path.join(harness.projectDir, ".opencode", "agents", `${id}.md`));
     expect(agentFile("build")).toBe(false);
     expect(agentFile("plan")).toBe(false);
+
+    const demoted = (id: string) => {
+      const entries = harness.agentUpdates.filter(([agentId]) => agentId === id);
+      expect(entries.length).toBe(1);
+      const agent: Record<string, unknown> = { mode: "primary", hidden: false };
+      entries[0]![1](agent);
+      return agent;
+    };
+    expect(demoted("build").mode).toBe("subagent");
+    expect(demoted("plan").mode).toBe("subagent");
+
+    // OpenCode's hidden system agents must stay primary: demoting them makes
+    // `opencode run` fail with AgentNotFoundError.
+    for (const systemAgent of ["compaction", "title", "summary"]) {
+      expect(harness.agentUpdates.some(([agentId]) => agentId === systemAgent)).toBe(false);
+    }
 
     // zetta is the primary default (no mode field → primary)
     expect(agentEntry(harness, "zetta")).toBeDefined();

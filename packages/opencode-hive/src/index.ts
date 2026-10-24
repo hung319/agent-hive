@@ -1848,7 +1848,10 @@ Expand your Discovery section and try again.`;
           if (featureData.status === 'approved') {
             featureService.updateStatus(feature, 'executing');
           }
-          return `Tasks synced: ${result.created.length} created, ${result.removed.length} removed, ${result.kept.length} kept`;
+          const warningText = result.warnings?.length
+            ? `\n\nWarning: ${result.warnings.join('\n')}`
+            : '';
+          return `Tasks synced: ${result.created.length} created, ${result.removed.length} removed, ${result.kept.length} kept${warningText}`;
         },
       }),
 
@@ -2055,7 +2058,17 @@ Expand your Discovery section and try again.`;
               nextAction: 'Check the task folder name in your worker-prompt.md and retry hive_worktree_commit with the correct task id.',
             });
           }
-          if (taskInfo.status !== 'in_progress' && taskInfo.status !== 'blocked') {
+          let allowEmptyRecommit = false;
+          if (taskInfo.status === 'done') {
+            // A completed task whose branch never received a commit can be
+            // re-committed: the previous call had nothing to commit, so the
+            // work is still pending in the worktree.
+            const doneWorktree = await worktreeService.get(feature, task);
+            const rawStatus = taskService.getRawStatus(feature, task);
+            allowEmptyRecommit =
+              !!doneWorktree && !!rawStatus?.baseCommit && doneWorktree.commit === rawStatus.baseCommit;
+          }
+          if (taskInfo.status !== 'in_progress' && taskInfo.status !== 'blocked' && !allowEmptyRecommit) {
             return respond({
               ok: false,
               terminal: false,
@@ -2072,7 +2085,7 @@ Expand your Discovery section and try again.`;
           // ADVISORY: Track verification status (workers do best-effort)
           let verificationNote: string | undefined;
           if (status === 'completed') {
-            const verificationKeywords = ['test', 'build', 'lint', 'vitest', 'jest', 'npm run', 'pnpm', 'cargo', 'pytest', 'verified', 'passes', 'succeeds', 'ast-grep', 'scan'];
+            const verificationKeywords = ['test', 'build', 'lint', 'vitest', 'jest', 'npm run', 'pnpm', 'cargo', 'pytest', 'verified', 'verification', 'verify', 'passes', 'succeeds', 'ast-grep', 'scan'];
             const summaryLower = summary.toLowerCase();
             const hasVerificationMention = verificationKeywords.some(kw => summaryLower.includes(kw));
 
@@ -2745,10 +2758,22 @@ Use these tools when the task matches their purpose. They are available as regul
       }
 
       await ctx.agent.transform((agentEditor) => {
-        // Make queen the default primary agent. Built-in agents stay untouched:
-        // `opencode run` resolves its default session to `build`, and demoting
-        // it makes every default session fail with AgentNotFoundError.
-        // (Same behavior as V1: zetta is added, builtins remain usable.)
+        // Match V1: zetta is the only user-facing primary agent. Demote the
+        // built-in `build`/`plan` primaries so they no longer appear in the
+        // primary-agent switcher.
+        //
+        // Do NOT demote OpenCode's hidden system agents (compaction, title,
+        // summary): `opencode run` uses them internally, and making them
+        // subagents breaks every session with AgentNotFoundError.
+        for (const builtinAgent of ['build', 'plan']) {
+          try {
+            agentEditor.update(builtinAgent, (agent) => {
+              agent.mode = 'subagent';
+            });
+          } catch {
+            // 0-risk: keep the builtin as-is when the version lacks it
+          }
+        }
         try {
           agentEditor.default(primaryAgent);
         } catch {

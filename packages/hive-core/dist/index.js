@@ -1433,13 +1433,15 @@ class TaskService {
       throw new Error(`No plan.md found for feature '${featureName}'`);
     }
     const planTasks = this.parseTasksFromPlan(planContent);
+    const warnings = this.collectSyncWarnings(planContent, planTasks);
     this.validateDependencyGraph(planTasks, featureName);
     const existingTasks = this.list(featureName);
     const result = {
       created: [],
       removed: [],
       kept: [],
-      manual: []
+      manual: [],
+      ...warnings.length > 0 && { warnings }
     };
     const existingByName = new Map(existingTasks.map((t) => [t.folder, t]));
     for (const existing of existingTasks) {
@@ -1753,6 +1755,20 @@ ${f.content}`).join(`
       return 1;
     const orders = existingFolders.map((f) => parseInt(f.split("-")[0], 10)).filter((n) => !isNaN(n));
     return Math.max(...orders, 0) + 1;
+  }
+  collectSyncWarnings(planContent, planTasks) {
+    if (planTasks.length > 0)
+      return [];
+    const lines = planContent.split(`
+`);
+    const hasTasksSection = lines.some((line) => /^##\s+Tasks\b/i.test(line));
+    if (!hasTasksSection)
+      return [];
+    const headers = lines.filter((line) => /^###\s+/.test(line)).map((line) => line.trim());
+    const detail = headers.length > 0 ? `Found headers that do not match: ${headers.slice(0, 3).map((h) => `"${h}"`).join(", ")}.` : 'No "###" task headers were found.';
+    return [
+      `No tasks were generated from the plan. ${detail} Task headers must look like "### 1. Task name" (number, dot, name).`
+    ];
   }
   parseTasksFromPlan(content) {
     const tasks = [];
@@ -7724,7 +7740,7 @@ class DockerSandboxService {
   }
   static isDockerAvailable() {
     try {
-      execSync("docker info", { stdio: "ignore" });
+      execSync("docker info", { stdio: "ignore", timeout: 3000 });
       return true;
     } catch {
       return false;

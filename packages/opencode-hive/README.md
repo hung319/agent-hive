@@ -92,6 +92,8 @@ Define derived agents from `forager-worker` or `hygienic-reviewer`:
 
 Omitted fields (`model`, `variant`, `temperature`) inherit from the base agent. `autoLoadSkills` merges with base defaults, de-duplicates, and applies global `disableSkills`. Custom agent IDs cannot reuse built-in Hive names or reserved plugin IDs.
 
+> **Temperature:** `temperature` is still accepted in `agent_hive.json`, but OpenCode 2.1 no longer supports it on agent definitions and ignores it. Hive omits the field from generated agent files to avoid `ignored unsupported agent fields` warnings.
+
 ### Skills
 
 | ID | Use Case |

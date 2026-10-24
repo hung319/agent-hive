@@ -356,6 +356,57 @@ describe("TaskService", () => {
   });
 
   describe("sync() - dependency parsing", () => {
+    it("warns when the Tasks section has no parseable task headers", () => {
+      const featureName = "malformed-plan-feature";
+      const featurePath = path.join(TEST_DIR, ".hive", "features", featureName);
+      fs.mkdirSync(featurePath, { recursive: true });
+
+      fs.writeFileSync(
+        path.join(featurePath, "feature.json"),
+        JSON.stringify({ name: featureName, status: "executing", createdAt: new Date().toISOString() })
+      );
+
+      // Headers that look like files instead of "### N. Task name"
+      fs.writeFileSync(
+        path.join(featurePath, "plan.md"),
+        `# Plan
+
+## Tasks
+
+### 01-add-smoke-file.md
+Add a file.
+
+### 02-verify-smoke-file.md
+Verify it.
+`,
+      );
+
+      const result = service.sync(featureName);
+
+      expect(result.created).toHaveLength(0);
+      expect(result.warnings).toBeDefined();
+      expect(result.warnings![0]).toContain("No tasks were generated");
+      expect(result.warnings![0]).toContain("### 1. Task name");
+      expect(result.warnings![0]).toContain("01-add-smoke-file.md");
+    });
+
+    it("does not warn when the plan has no Tasks section", () => {
+      const featureName = "no-tasks-feature";
+      const featurePath = path.join(TEST_DIR, ".hive", "features", featureName);
+      fs.mkdirSync(featurePath, { recursive: true });
+
+      fs.writeFileSync(
+        path.join(featurePath, "feature.json"),
+        JSON.stringify({ name: featureName, status: "executing", createdAt: new Date().toISOString() })
+      );
+      fs.writeFileSync(path.join(featurePath, "plan.md"), "# Plan\n\nJust prose.\n");
+
+      const result = service.sync(featureName);
+
+      expect(result.created).toHaveLength(0);
+      expect(result.warnings).toBeUndefined();
+    });
+
     it("parses explicit Depends on: annotations and resolves to folder names", () => {
       const featureName = "test-feature";
       const featurePath = path.join(TEST_DIR, ".hive", "features", featureName);

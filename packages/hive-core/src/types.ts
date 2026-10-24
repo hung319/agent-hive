@@ -100,6 +100,8 @@ export interface TasksSyncResult {
   removed: string[];
   kept: string[];
   manual: string[];
+  /** Non-fatal problems detected while syncing (e.g. unparsable plan headers). */
+  warnings?: string[];
 }
 
 export interface TaskInfo {

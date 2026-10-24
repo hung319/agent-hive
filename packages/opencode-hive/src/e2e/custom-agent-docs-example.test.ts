@@ -93,15 +93,16 @@ describe('e2e: published custom-agent docs example (V2)', () => {
 
     // V2 model refs merge variant into `provider/model#variant`.
     expect(frontmatterField(foragerUi!, 'model')).toBe('anthropic/claude-sonnet-4-20250514#high');
-    // Temperature renders into the agent md frontmatter (V2-supported field).
-    expect(Number(frontmatterField(foragerUi!, 'temperature'))).toBe(0.2);
+    // OpenCode 2.1 no longer supports agent temperature, so it must not be
+    // emitted (the field only produced "ignored unsupported agent fields").
+    expect(frontmatterField(foragerUi!, 'temperature')).toBeUndefined();
     expect(frontmatterField(foragerUi!, 'description')).toBe(
       JSON.stringify('Use for UI-heavy implementation tasks.'),
     );
 
-    // reviewer-security inherits the base agent's model + default temperature.
+    // reviewer-security inherits the base agent's model; temperature is not emitted.
     expect(frontmatterField(reviewerSecurity!, 'model')).toBe('github-copilot/gpt-5.2-codex');
-    expect(Number(frontmatterField(reviewerSecurity!, 'temperature'))).toBe(0.3);
+    expect(frontmatterField(reviewerSecurity!, 'temperature')).toBeUndefined();
     expect(frontmatterField(reviewerSecurity!, 'description')).toBe(
       JSON.stringify('Use for security-focused review passes.'),
     );

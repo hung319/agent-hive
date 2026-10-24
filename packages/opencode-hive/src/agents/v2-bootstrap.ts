@@ -8,8 +8,13 @@
  * At plugin setup we therefore generate one Markdown agent file per Hive
  * agent from the V1-shaped runtime configs (prompt, model, variant,
  * permission map) accumulated in `index.ts`. The plugin then wires the
- * default agent selection through `ctx.agent.transform` (built-in agents are
- * left untouched: demoting `build` breaks `opencode run`'s default session).
+ * default agent selection and demotes the built-in `build`/`plan` primaries
+ * through `ctx.agent.transform`, leaving OpenCode's hidden system agents
+ * (compaction, title, summary) untouched.
+ *
+ * OpenCode 2.1 no longer accepts a `temperature` field on agent definitions
+ * (it logs "ignored unsupported agent fields"), so the generated frontmatter
+ * omits it. The config option is still parsed for forward compatibility.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -24,6 +29,7 @@ export interface RuntimeAgentConfig {
   prompt: string;
   model?: string;
   variant?: string;
+  /** Accepted for config compatibility; OpenCode 2.1 ignores agent temperature. */
   temperature?: number;
   tools?: Record<string, boolean>;
   permission?: Record<string, string>;
@@ -75,8 +81,6 @@ export interface V2AgentDefinition {
   mode: 'primary' | 'subagent';
   system: string;
   model?: string;
-  /** Optional sampling temperature (supported in V2 agent md frontmatter). */
-  temperature?: number;
   permissions: V2PermissionRule[];
 }
 
@@ -87,7 +91,6 @@ export function toV2AgentDefinition(config: RuntimeAgentConfig): V2AgentDefiniti
     mode: 'subagent',
     system: config.prompt,
     model: toV2ModelRef(config),
-    temperature: config.temperature,
     permissions: toV2Permissions(config.permission),
   };
 }
@@ -106,9 +109,6 @@ export function renderAgentMarkdown(
   lines.push(`mode: ${definition.mode}`);
   if (definition.model) {
     lines.push(`model: ${definition.model}`);
-  }
-  if (definition.temperature !== undefined) {
-    lines.push(`temperature: ${definition.temperature}`);
   }
   if (definition.permissions.length > 0) {
     lines.push('permissions:');

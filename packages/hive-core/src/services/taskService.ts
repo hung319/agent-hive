@@ -62,6 +62,7 @@ export class TaskService {
     }
 
     const planTasks = this.parseTasksFromPlan(planContent);
+    const warnings = this.collectSyncWarnings(planContent, planTasks);
     
     // Validate dependency graph before proceeding
     this.validateDependencyGraph(planTasks, featureName);
@@ -73,6 +74,7 @@ export class TaskService {
       removed: [],
       kept: [],
       manual: [],
+      ...(warnings.length > 0 && { warnings }),
     };
 
     const existingByName = new Map(existingTasks.map(t => [t.folder, t]));
@@ -572,6 +574,25 @@ export class TaskService {
       .filter(n => !isNaN(n));
     
     return Math.max(...orders, 0) + 1;
+  }
+
+  private collectSyncWarnings(planContent: string, planTasks: ParsedTask[]): string[] {
+    if (planTasks.length > 0) return [];
+
+    const lines = planContent.split('\n');
+    const hasTasksSection = lines.some(line => /^##\s+Tasks\b/i.test(line));
+    if (!hasTasksSection) return [];
+
+    const headers = lines
+      .filter(line => /^###\s+/.test(line))
+      .map(line => line.trim());
+    const detail = headers.length > 0
+      ? `Found headers that do not match: ${headers.slice(0, 3).map(h => `"${h}"`).join(', ')}.`
+      : 'No "###" task headers were found.';
+
+    return [
+      `No tasks were generated from the plan. ${detail} Task headers must look like "### 1. Task name" (number, dot, name).`,
+    ];
   }
 
   private parseTasksFromPlan(content: string): ParsedTask[] {

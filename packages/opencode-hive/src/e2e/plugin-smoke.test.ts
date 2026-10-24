@@ -1100,6 +1100,135 @@ Do it
     expect(commitResult.nextAction).toContain("hive_merge");
   });
 
+  it("accepts a 'Verification:' line in the summary as verification evidence", async () => {
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    const execToolRef = (name: string, args: unknown, toolContext: ToolContext) =>
+      execTool(harness, name, args, toolContext);
+    const toolContext = createToolContext("sess_verification_keyword");
+
+    await execToolRef("hive_feature_create", { name: "verify-keyword-feature" }, toolContext);
+
+    const plan = `# Verify Keyword Feature
+
+## Discovery
+
+**Q: Is this a test?**
+A: Yes, it checks that an explicit verification line counts as evidence so the advisory note is skipped.
+
+**Research:** the completion flow scans the summary for verification keywords such as "test" or "verified".
+
+## Tasks
+
+### 1. First Task
+Do it
+`;
+
+    await execToolRef("hive_plan_write", { content: plan, feature: "verify-keyword-feature" }, toolContext);
+    await execToolRef("hive_plan_approve", { feature: "verify-keyword-feature" }, toolContext);
+    await execToolRef("hive_tasks_sync", { feature: "verify-keyword-feature" }, toolContext);
+    await execToolRef(
+      "hive_worktree_start",
+      { feature: "verify-keyword-feature", task: "01-first-task" },
+      toolContext,
+    );
+
+    const commitRaw = await execToolRef(
+      "hive_worktree_commit",
+      {
+        feature: "verify-keyword-feature",
+        task: "01-first-task",
+        status: "completed",
+        summary: "Added the smoke note.\n\nVerification: docs note matches expected content.",
+      },
+      toolContext,
+    );
+
+    const commitResult = JSON.parse(commitRaw as string) as {
+      ok: boolean;
+      taskState?: string;
+      verificationNote?: string;
+    };
+
+    expect(commitResult.ok).toBe(true);
+    expect(commitResult.taskState).toBe("done");
+    expect(commitResult.verificationNote).toBeUndefined();
+  });
+
+  it("allows committing a done task whose branch never received a commit", async () => {
+    const harness = await runV2PluginSetup({ directory: testRoot });
+    const execToolRef = (name: string, args: unknown, toolContext: ToolContext) =>
+      execTool(harness, name, args, toolContext);
+    const toolContext = createToolContext("sess_recommit_empty");
+
+    await execToolRef("hive_feature_create", { name: "recommit-feature" }, toolContext);
+
+    const plan = `# Recommit Feature
+
+## Discovery
+
+**Q: Is this a test?**
+A: Yes, it ensures an empty completion can be followed by a real commit once the worktree has changes.
+
+**Research:** hive_worktree_commit marks the task done even when git reports nothing to commit.
+
+## Tasks
+
+### 1. First Task
+Do it
+`;
+
+    await execToolRef("hive_plan_write", { content: plan, feature: "recommit-feature" }, toolContext);
+    await execToolRef("hive_plan_approve", { feature: "recommit-feature" }, toolContext);
+    await execToolRef("hive_tasks_sync", { feature: "recommit-feature" }, toolContext);
+    const worktreeRaw = await execToolRef(
+      "hive_worktree_start",
+      { feature: "recommit-feature", task: "01-first-task" },
+      toolContext,
+    );
+    const worktreePath = (JSON.parse(worktreeRaw as string) as { worktreePath?: string }).worktreePath!;
+    expect(worktreePath).toBeDefined();
+
+    // First attempt: nothing to commit, but the task is marked done.
+    const emptyRaw = await execToolRef(
+      "hive_worktree_commit",
+      { feature: "recommit-feature", task: "01-first-task", status: "completed", summary: "Nothing yet." },
+      toolContext,
+    );
+    const emptyResult = JSON.parse(emptyRaw as string) as {
+      ok: boolean;
+      taskState?: string;
+      commit?: { committed?: boolean };
+    };
+    expect(emptyResult.ok).toBe(true);
+    expect(emptyResult.taskState).toBe("done");
+    expect(emptyResult.commit?.committed).toBe(false);
+
+    // Second attempt after real work must commit instead of rejecting the state.
+    fs.writeFileSync(path.join(worktreePath, "recommit-note.txt"), "real work\n");
+    const realRaw = await execToolRef(
+      "hive_worktree_commit",
+      {
+        feature: "recommit-feature",
+        task: "01-first-task",
+        status: "completed",
+        summary: "Added recommit note. Verification: file exists.",
+      },
+      toolContext,
+    );
+    const realResult = JSON.parse(realRaw as string) as {
+      ok: boolean;
+      status?: string;
+      taskState?: string;
+      commit?: { committed?: boolean; sha?: string };
+    };
+
+    expect(realResult.ok).toBe(true);
+    expect(realResult.status).toBe("completed");
+    expect(realResult.taskState).toBe("done");
+    expect(realResult.commit?.committed).toBe(true);
+    expect(realResult.commit?.sha).toBeDefined();
+  });
+
   it("auto-loads parallel exploration for planner agents by default", async () => {
     // Test unified mode agents
     const harness = await runV2PluginSetup({ directory: testRoot });
