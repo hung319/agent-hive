@@ -13,24 +13,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: A bare run
-        run: echo hello
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
 
-      - name: B bun version
-        run: bun --version
-
+      # `bun test` loads the plugin, whose setup auto-installs tool packages with
+      # npm and reads `npm root -g`; without Node those steps degrade silently.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: C node version
-        run: node --version
+      # `bun` is not on PATH here (setup-bun only exposes the binary it runs).
+      - name: Put bun on PATH for the test run
+        run: echo "$(dirname "$(command -v bun)")" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: bun install
@@ -48,15 +45,7 @@ jobs:
 
       - name: Test opencode-hive
         working-directory: packages/opencode-hive
-        run: |
-          bun test > /tmp/opencode-hive-test.log 2>&1
-          rc=$?
-          echo "bun test exited with $rc"
-          echo "--- last 60 lines"
-          tail -60 /tmp/opencode-hive-test.log
-          echo "--- failing markers"
-          grep -n -E '^\(fail\)|error:|Cannot find module' /tmp/opencode-hive-test.log | head -20
-          exit $rc
+        run: bun test
 
       - name: Build opencode-hive
         working-directory: packages/opencode-hive
