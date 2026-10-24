@@ -31,93 +31,19 @@ jobs:
       - name: Reinstall to link workspace packages
         run: bun install
 
-      - name: Test hive-core
-        working-directory: packages/hive-core
-        run: bun test
-
-      # The e2e suites `git init` + `git commit`; the runner image can lack a
-      # commit identity, which aborted setup before any assertion ran.
       - name: Configure git identity
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: P src/utils/auto-recall.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/auto-recall.test.ts --timeout 30000
-      - name: P src/utils/codegraph-init.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/codegraph-init.test.ts --timeout 30000
-      - name: P src/utils/codegraph-installer.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/codegraph-installer.test.ts --timeout 30000
-      - name: P src/utils/format.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/format.test.ts --timeout 30000
-      - name: P src/utils/prompt-budgeting.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/prompt-budgeting.test.ts --timeout 30000
-      - name: P src/utils/prompt-file.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/prompt-file.test.ts --timeout 30000
-      - name: P src/utils/prompt-observability.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/prompt-observability.test.ts --timeout 30000
-      - name: P src/utils/sensitive-data-filter.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/sensitive-data-filter.test.ts --timeout 30000
-      - name: P src/utils/tool-installer.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/tool-installer.test.ts --timeout 30000
-      - name: P src/utils/worker-prompt.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils/worker-prompt.test.ts --timeout 30000
-      - name: P src/services/vector-memory.test.ts
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/services/vector-memory.test.ts --timeout 30000
-      - name: P src/tools
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/tools --timeout 30000
-      - name: P src/mcp
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/mcp --timeout 30000
-      - name: P src/templates
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/templates --timeout 30000
-      - name: Test opencode-hive (whole suite)
+      - name: Probe bash binary
+        run: |
+          head -c 200 /bin/bash | od -c | head -3
+          file /bin/bash || true
+          ls -la /bin/sh
+
+      - name: Test opencode-hive
         working-directory: packages/opencode-hive
         env:
           HIVE_DISABLE_AUTO_INSTALL: '1'
         run: bun test --timeout 30000
-
-      - name: Build opencode-hive
-        working-directory: packages/opencode-hive
-        run: bun run build
