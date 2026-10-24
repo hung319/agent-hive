@@ -36,11 +36,11 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Probe bash binary
+      - name: Probe PATH
         run: |
-          head -c 200 /bin/bash | od -c | head -3
-          file /bin/bash || true
-          ls -la /bin/sh
+          echo "PATH=$PATH"
+          for d in $(echo "$PATH" | tr ':' ' '); do [ -e "$d/bash" ] && echo "bash in $d"; [ -e "$d/sh" ] && echo "sh in $d"; [ -e "$d/git" ] && echo "git in $d"; done
+          ls -la /usr/local/bin | head -20
 
       - name: Test opencode-hive
         working-directory: packages/opencode-hive
