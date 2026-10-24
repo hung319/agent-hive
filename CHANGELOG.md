@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Fix: RTK **không còn tự tải binary** từ GitHub. Trước đây mỗi lần nạp plugin, `ensureRtkInstalled()` gọi GitHub API + tải `.tar.gz`, giải nén rồi **ghi đè `event.command`** trỏ vào binary vừa tải mà không kiểm chứng — tải hỏng là mọi lệnh shell mang tiền tố đường dẫn không tồn tại. Nay Hive chỉ dùng `rtk` khi binary nằm trên PATH (hoặc binary cũ còn trong `~/.config/opencode/hive/bin`), kiểm tra thực thi được trước khi prefix; không có thì lệnh chạy nguyên vẹn, không gọi mạng
+- Fix: `rtk` (và `enabled`/`command` của nó) được **khai báo trong `agent_hive.schema.json`** — trước đây schema đặt `additionalProperties: false` mà thiếu key này nên editor báo đỏ một cấu hình hợp lệ
 - Fix: `ast_grep_*` trả kết quả có cấu trúc khi **thiếu `@ast-grep/napi`** (native binary tải hỏng / cài thiếu) thay vì ném lỗi thô. Trước đây loader `throw` mà không tool nào bắt, nên cả 5 tool `ast_grep_*` trả exception; nay trả `success: false` kèm `reason`, các lựa chọn thay thế (`code_search`, `grep`, `call_graph_extract`) và cách sửa, plugin và các tool khác vẫn chạy bình thường
 
 ## [2.0.3] - 2026-10-24

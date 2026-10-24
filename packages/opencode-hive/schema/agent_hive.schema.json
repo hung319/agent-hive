@@ -134,6 +134,22 @@
         }
       }
     },
+    "rtk": {
+      "type": "object",
+      "description": "Shell output compression via RTK, when an `rtk` binary is on PATH. Hive never downloads it: shell commands are only prefixed with the configured binary.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prefix shell commands with RTK to reduce output tokens. Takes effect only when the binary resolves."
+        },
+        "command": {
+          "type": "string",
+          "description": "RTK binary to use (default: the `rtk` found on PATH)."
+        }
+      },
+      "additionalProperties": false
+    },
     "mcpApiKeys": {
       "type": "object",
       "description": "MCP API keys configuration (also supports environment variables: EXA_API_KEY, CONTEXT7_API_KEY)",

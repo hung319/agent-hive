@@ -86,7 +86,7 @@ import { CODEBASE_LOCATOR_PROMPT } from './agents/codebase-locator.js';
 import { CODEBASE_ANALYZER_PROMPT } from './agents/codebase-analyzer.js';
 import { buildCustomSubagents } from './agents/custom-agents.js';
 import { createBuiltinMcps } from './mcp/index.js';
-import { ensureRtkInstalled, isRtkOnPath } from './utils/rtk-installer.js';
+import { ensureRtkInstalled } from './utils/rtk-installer.js';
 import { getHiveBinPath } from './utils/tool-installer.js';
 import { ensureHivePathInShellConfig } from './utils/shell-path.js';
 import { ensureCodegraphInit } from './utils/codegraph-init.js';
@@ -289,6 +289,37 @@ let codegraphBootPromise: Promise<CodegraphInitResult> | null = null;
 function getRtkBootPromise(): Promise<string> {
   if (!rtkBootPromise) rtkBootPromise = ensureRtkInstalled();
   return rtkBootPromise;
+}
+
+/**
+ * Whether `command` names an executable we can actually run.
+ *
+ * A configured or configured-by-default RTK that is not on disk must not
+ * rewrite shell commands: the command would fail with "rtk: command not
+ * found" and the agent would have no idea why. An absolute path is checked
+ * directly; a bare name is looked up on the live PATH.
+ */
+function isExecutableCommand(command: string): boolean {
+  if (command.includes('/') || command.includes('\\')) {
+    try {
+      fs.accessSync(command, fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const pathVar = process.env.PATH ?? '';
+  return pathVar
+    .split(path.delimiter)
+    .filter(Boolean)
+    .some((dir) => {
+      try {
+        fs.accessSync(path.join(dir, command), fs.constants.X_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    });
 }
 function getLspBootPromise(): Promise<import('./services/lsp-autoinstall.js').LspServerResult[]> {
   if (!lspBootPromise) lspBootPromise = ensureLspServers();
@@ -1545,9 +1576,12 @@ ${snapshot}
       try {
         const rtkConfig = configService.get().rtk;
         const rtkBinary = await rtkBootPromise;
-        const rtkAvailable = rtkBinary !== '';
-        const isRtkEnabled = rtkConfig?.enabled ?? rtkAvailable;
+        // Only rewrite the command when RTK can really run: a missing binary
+        // would otherwise make every shell command fail with a confusing
+        // "rtk: command not found".
         const rtkCmd = rtkConfig?.command || (rtkBinary || 'rtk');
+        const rtkAvailable = isExecutableCommand(rtkCmd);
+        const isRtkEnabled = rtkConfig?.enabled ?? rtkAvailable;
         let finalCommand = command;
         if (isRtkEnabled && rtkAvailable) {
           finalCommand = prefixWithRtk(command, rtkCmd);

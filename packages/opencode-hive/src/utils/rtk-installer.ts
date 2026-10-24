@@ -1,52 +1,41 @@
 /**
- * RTK (Rust Token Killer) Auto-Installer
- * Downloads RTK binary from https://github.com/rtk-ai/rtk
- * RTK reduces LLM token usage by 60-90% by filtering shell output.
- * 
- * Features:
- * - 100+ hand-tuned command filters (git, cargo, npm, etc.)
- * - Transparent proxy - zero agent-side changes needed
- * - Analytics dashboard with `rtk gain`
- * - 16 AI coding tools supported
+ * RTK (Rust Token Killer) integration.
+ *
+ * RTK filters shell output (100+ command filters for git, cargo, npm, …) and
+ * cuts output tokens by 60-90%. Hive does not ship or download it: the user
+ * installs the binary (https://github.com/rtk-ai/rtk), and Hive only prefixes
+ * commands with it when it is on PATH.
+ *
+ * Earlier versions downloaded a release tarball from GitHub into
+ * ~/.config/opencode/hive/bin on every plugin load. That had two problems:
+ * a plugin load reached the network (the same class of bug that made CI red),
+ * and it rewrote `event.command` to point at a binary that was never verified —
+ * which silently broke the shell hook when the download failed mid-way.
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
-import { shouldSkipAutoInstall } from './skip-install.js';
 
-const RTK_REPO = 'rtk-ai/rtk';
-const FALLBACK_VERSION = '1.0.0';
 const BINARY_NAME = process.platform === 'win32' ? 'rtk.exe' : 'rtk';
 
-const OS_MAP: Record<string, string> = {
-  darwin: 'darwin',
-  linux: 'linux',
-  win32: 'windows',
-};
-
-const ARCH_MAP: Record<string, string> = {
-  x64: 'amd64',
-  arm64: 'arm64',
-};
-
-function getInstallDir(): string {
+/** Directory older Hive versions downloaded the binary into. */
+function getLegacyInstallDir(): string {
   return path.join(process.env.HOME || '/root', '.config', 'opencode', 'hive', 'bin');
 }
 
-export function getRtkBinaryPath(): string {
-  return path.join(getInstallDir(), BINARY_NAME);
-}
-
-export function isRtkInstalled(): boolean {
-  return fs.existsSync(getRtkBinaryPath());
-}
-
 /**
- * Check if RTK is available on PATH (e.g., globally installed).
+ * Path of a binary left behind by an earlier auto-download, if any.
+ *
+ * Read-only: this never downloads. The file is used only when it exists, so
+ * upgrades keep working on machines that already have it.
  */
-export function isRtkOnPath(): boolean {
+export function getRtkBinaryPath(): string {
+  return path.join(getLegacyInstallDir(), BINARY_NAME);
+}
+
+/** True when an earlier Hive version left an RTK binary on disk. */
+export function isRtkInstalled(): boolean {
   try {
-    execSync('which rtk 2>/dev/null', { stdio: 'pipe' });
+    fs.accessSync(getRtkBinaryPath(), fs.constants.X_OK);
     return true;
   } catch {
     return false;
@@ -54,106 +43,47 @@ export function isRtkOnPath(): boolean {
 }
 
 /**
- * Check if RTK is available (either auto-installed or on PATH).
+ * Check if RTK is available on PATH.
+ *
+ * Scans PATH directly instead of spawning `which`: Bun snapshots the
+ * environment at startup, so a child process would not see a PATH the user
+ * changed during the session, and this avoids a fork per shell command.
  */
-export function isRtkAvailable(): boolean {
-  return isRtkInstalled() || isRtkOnPath();
-}
-
-async function getLatestVersion(): Promise<string> {
-  const response = await fetch(
-    `https://api.github.com/repos/${RTK_REPO}/releases/latest`,
-    { headers: { 'Accept': 'application/vnd.github.v3+json' } },
-  );
-  if (!response.ok) {
-    throw new Error(`GitHub API responded with ${response.status}`);
+export function isRtkOnPath(): boolean {
+  const pathVar = process.env.PATH;
+  if (pathVar === undefined || pathVar === '') {
+    return false;
   }
-  const data = await response.json() as { tag_name: string };
-  return data.tag_name.replace(/^v/, '');
+  const names = process.platform === 'win32'
+    ? ['rtk.exe', 'rtk.cmd', 'rtk.bat']
+    : ['rtk'];
+  for (const dir of pathVar.split(path.delimiter)) {
+    if (dir === '') continue;
+    for (const name of names) {
+      try {
+        fs.accessSync(path.join(dir, name), fs.constants.X_OK);
+        return true;
+      } catch {
+        // try the next candidate
+      }
+    }
+  }
+  return false;
 }
 
 /**
- * Ensure RTK binary is installed.
- * Downloads from GitHub releases if not present.
- * Falls back to 'rtk' (PATH lookup) if installation fails.
+ * Resolve the RTK command at boot.
+ *
+ * Returns '' when RTK is unavailable, and never touches the network: Hive
+ * simply stops prefixing commands and everything keeps working unfiltered.
  */
 export async function ensureRtkInstalled(): Promise<string> {
-  if (shouldSkipAutoInstall()) {
-    return getRtkBinaryPath();
-  }
-  const binaryPath = getRtkBinaryPath();
-
-  if (isRtkInstalled()) {
-    return binaryPath;
-  }
-
-  console.log('[hive:rtk] Auto-installing RTK binary for 60-90% token reduction...');
-
-  const os = OS_MAP[process.platform] || 'linux';
-  const arch = ARCH_MAP[process.arch] || 'amd64';
-
-  let version: string;
-  try {
-    version = await getLatestVersion();
-  } catch {
-    version = FALLBACK_VERSION;
-  }
-
-  const url = `https://github.com/${RTK_REPO}/releases/download/v${version}/rtk_${version}_${os}_${arch}.tar.gz`;
-  const installDir = getInstallDir();
-  const tmpDir = path.join(installDir, '.rtk-tmp');
-
-  try {
-    if (!fs.existsSync(installDir)) {
-      fs.mkdirSync(installDir, { recursive: true });
-    }
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
-
-    console.log(`[hive:rtk] Downloading ${os}/${arch} v${version}...`);
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Download failed with HTTP ${response.status} for ${url}`);
-    }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    fs.writeFileSync(path.join(tmpDir, 'rtk.tar.gz'), buffer);
-
-    execSync(`tar xzf "${path.join(tmpDir, 'rtk.tar.gz')}" -C "${tmpDir}"`, { stdio: 'pipe' });
-
-    const extractedBin = path.join(tmpDir, BINARY_NAME);
-    if (!fs.existsSync(extractedBin)) {
-      throw new Error('Binary not found in extracted archive');
-    }
-
-    fs.renameSync(extractedBin, binaryPath);
-    fs.chmodSync(binaryPath, 0o755);
-    console.log(`[hive:rtk] Installed to ${binaryPath}`);
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  } catch (error) {
-    if (fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[hive:rtk] Auto-install failed: ${message}`);
-    
-    // Fallback: check if RTK is on PATH (globally installed)
-    if (isRtkOnPath()) {
-      console.log('[hive:rtk] Found RTK on PATH, will use it');
-      return 'rtk';  // let PATH resolve it
-    }
-    
-    console.warn('[hive:rtk] Commands will pass through without filtering - no impact on functionality');
-    return '';  // RTK not available
-  }
-
-  return binaryPath;
+  return getRtkCommand();
 }
 
 /**
  * Get the RTK command to use.
- * Returns the binary path or 'rtk' if on PATH.
+ * Returns the leftover binary path, 'rtk' if on PATH, or '' if unavailable.
  */
 export function getRtkCommand(): string {
   if (isRtkInstalled()) {
