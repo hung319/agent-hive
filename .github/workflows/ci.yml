@@ -35,10 +35,10 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: T2 minimal bun:test
+      - name: T3 one global-agents test
         working-directory: packages/opencode-hive
-        run: bun test ./src/utils/format.test.ts
+        run: bun test ./src/agents/global-agents.test.ts -t 'writes definitions to the global config dir'
 
-      - name: T2b failing expect
+      - name: T3b identical, repeated
         working-directory: packages/opencode-hive
-        run: bun -e 'console.log("bun -e ok", process.cwd())'
+        run: bun test ./src/agents/global-agents.test.ts -t 'writes definitions to the global config dir'
