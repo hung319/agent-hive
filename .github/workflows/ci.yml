@@ -35,8 +35,8 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: T4
+      - name: T4x probe
         working-directory: packages/opencode-hive
         env:
-          HIVE_DEBUG_IMPORT: '1'
-        run: bun -e 'console.log("env test ok")'
+          X_PROBE_KEY: '1'
+        run: bun -e 'console.log("probe ok")'
