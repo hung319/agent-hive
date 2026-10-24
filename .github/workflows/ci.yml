@@ -35,18 +35,18 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: P1 echo
+      - name: P5 custom-agents
         working-directory: packages/opencode-hive
-        run: echo p1
+        run: bun test ./src/agents/custom-agents.test.ts
 
-      - name: P2 pwd
+      - name: P6 global-agents
         working-directory: packages/opencode-hive
-        run: pwd
+        run: bun test ./src/agents/global-agents.test.ts
 
-      - name: P3 bun version
+      - name: P7 permissions
         working-directory: packages/opencode-hive
-        run: bun --version
+        run: bun test ./src/agents/permissions.test.ts
 
-      - name: P4 unit tests
+      - name: P8 prompts
         working-directory: packages/opencode-hive
-        run: bun test ./src/utils
+        run: bun test ./src/agents/prompts.test.ts
