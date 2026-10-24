@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
 function execSync(cmd: string, opts: { cwd: string }): void {
@@ -31,7 +32,7 @@ describe("e2e: Forager compaction loop mitigation (in-process)", () => {
     originalHome = process.env.HOME;
     originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
     process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
-    testRoot = fs.mkdtempSync(path.join("/tmp", "hive-e2e-loop-"));
+    testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "hive-e2e-loop-"));
     process.env.HOME = testRoot;
   });
 

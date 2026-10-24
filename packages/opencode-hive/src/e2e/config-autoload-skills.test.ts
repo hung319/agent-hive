@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import {
   runV2PluginSetup,
@@ -63,7 +64,7 @@ describe("config hook autoLoadSkills injection", () => {
     originalHome = process.env.HOME;
     originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
     process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
-    testRoot = fs.mkdtempSync(path.join("/tmp", "hive-config-autoload-"));
+    testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "hive-config-autoload-"));
     process.env.HOME = testRoot;
   });
 
@@ -394,7 +395,7 @@ describe("file-based skill fallback in autoLoadSkills", () => {
     originalHome = process.env.HOME;
     originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
     process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
-    testRoot = fs.mkdtempSync(path.join("/tmp", "hive-config-fallback-"));
+    testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "hive-config-fallback-"));
     process.env.HOME = testRoot;
   });
 

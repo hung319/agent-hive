@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "fs";
+import * as os from "os";
 
 function execSync(cmd: string, opts: { cwd: string }): void {
   const parts = cmd.match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
@@ -64,7 +65,7 @@ describe("e2e: opencode-hive plugin (in-process)", () => {
     originalHome = process.env.HOME;
     originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
     process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
-    testRoot = fs.mkdtempSync(path.join("/tmp", "hive-e2e-plugin-"));
+    testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "hive-e2e-plugin-"));
     process.env.HOME = testRoot;
 
     execSync("git init", { cwd: testRoot });

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { runV2PluginSetup, type V2Harness } from "../__tests__/v2-harness.js";
 
@@ -39,7 +40,7 @@ describe("agentMode gating (V2 bootstrap)", () => {
     originalHome = process.env.HOME;
     originalHiveDisable = process.env.HIVE_DISABLE_AUTO_INSTALL;
     process.env.HIVE_DISABLE_AUTO_INSTALL = "1";
-    testRoot = fs.mkdtempSync(path.join("/tmp", "hive-agent-mode-"));
+    testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "hive-agent-mode-"));
     process.env.HOME = testRoot;
   });
 

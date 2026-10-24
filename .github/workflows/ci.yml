@@ -35,6 +35,8 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
+      # The e2e suites `git init` + `git commit`; the runner image can lack a
+      # commit identity, which aborted setup before any assertion ran.
       - name: Configure git identity
         run: |
           git config --global user.name "github-actions[bot]"
@@ -44,28 +46,8 @@ jobs:
         working-directory: packages/opencode-hive
         env:
           HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test src/e2e/custom-agent-docs-example.test.ts
+        run: bun test --timeout 30000
 
-      - name: T2 agent-mode
+      - name: Build opencode-hive
         working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test src/e2e/agent-mode.test.ts
-
-      - name: T3 config-autoload
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test src/e2e/config-autoload-skills.test.ts
-
-      - name: T4 plugin-smoke
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test src/e2e/plugin-smoke.test.ts
-
-      - name: T5 runtime-smoke
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test src/e2e/opencode-runtime-smoke.test.ts
+        run: bun run build
