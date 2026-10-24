@@ -35,12 +35,11 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      # The e2e suites `git init` + `git commit`; the runner image can lack a
-      # commit identity, which aborted setup before any assertion ran.
-      - name: Configure git identity
+      - name: Probe node node
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ls -la node 2>&1 | head -2
+          node -e 'console.log(1)' 2>&1 | head -3
+          echo "rc=$?"
 
       # Plugin setup no longer installs packages, so no network is needed here.
       - name: Test opencode-hive
