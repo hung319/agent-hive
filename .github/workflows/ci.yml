@@ -36,9 +36,21 @@ jobs:
         run: bun test
 
       # Bisect: which group turns the suite red on the runner?
-      - name: G1 utils+services+tools
+      - name: G1 utils
         working-directory: packages/opencode-hive
-        run: bun test ./src/utils ./src/services ./src/tools ./src/mcp ./src/templates
+        run: bun test ./src/utils
+
+      - name: G1b services
+        working-directory: packages/opencode-hive
+        run: bun test ./src/services
+
+      - name: G1c tools
+        working-directory: packages/opencode-hive
+        run: bun test ./src/tools
+
+      - name: G1d mcp+templates
+        working-directory: packages/opencode-hive
+        run: bun test ./src/mcp ./src/templates
 
       - name: G2 hooks+skills+harness
         working-directory: packages/opencode-hive
