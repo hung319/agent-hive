@@ -5,12 +5,14 @@ import * as path from 'path';
 import { resolveInstaller, disabledToolReasons } from './tool-installer.js';
 
 /**
- * Tool auto-install hardening.
+ * Tool auto-install.
  *
- * `bun pm bin -g` and `bun test` do not put `bun` on PATH (the CI workflow only
- * installs Bun via setup-bun), so auto-install once hard-failed there with
- * `/bin/sh: 1: npm: not found` on every plugin load. The installer now picks
- * whatever package manager actually exists, and reports "no installer" cleanly.
+ * Install used to run from plugin setup, so every `bun test` load tried to
+ * download tool packages with `npm`; on CI (no Node) it logged
+ * `/bin/sh: 1: npm: not found`, and when npm was present a failed install could
+ * change the load's outcome. Install now happens on first use instead, and
+ * these tests cover the parts that are pure: which manager would be used, and
+ * which packages are intentionally left alone.
  */
 
 function tempBinDir(files: string[]): string {
@@ -24,10 +26,10 @@ function tempBinDir(files: string[]): string {
 }
 
 describe('resolveInstaller', () => {
-  test('prefers npm when node and npm are on PATH', () => {
+  test('prefers npm when it is on PATH', () => {
     const dir = tempBinDir(['node', 'npm', 'bun']);
     try {
-      expect(resolveInstaller(dir)?.command).toBe('npm');
+      expect(resolveInstaller(dir)).toEqual({ command: 'npm', label: 'npm' });
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -43,16 +45,7 @@ describe('resolveInstaller', () => {
   });
 
   test('returns null when no installer is available', () => {
-    const dir = tempBinDir([]);
-    try {
-      expect(resolveInstaller(dir)).toBeNull();
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test('does not treat npm without a node runtime as usable', () => {
-    const dir = tempBinDir(['npm']);
+    const dir = tempBinDir(['node']);
     try {
       expect(resolveInstaller(dir)).toBeNull();
     } finally {

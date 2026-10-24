@@ -1,7 +1,7 @@
 import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getHiveNodeModulesPath, getGlobalNpmRoot } from '../utils/tool-installer.js';
+import { getHiveNodeModulesPath, getGlobalNpmRoot, ensureToolInstalled } from '../utils/tool-installer.js';
 
 /**
  * Agent Booster Tool
@@ -105,7 +105,12 @@ async function initBooster(): Promise<void> {
   boosterInitPromise = (async () => {
     try {
       let booster: any;
-      const pkgPath = resolveBoosterPackage();
+      let pkgPath = resolveBoosterPackage();
+      if (!pkgPath) {
+        // First real use: let the installer fetch the package (no network at
+        // plugin load), then re-resolve it from the hive packages directory.
+        if (await ensureToolInstalled(BOOSTER_PACKAGE)) pkgPath = resolveBoosterPackage();
+      }
       if (pkgPath) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         booster = require(pkgPath);
@@ -140,6 +145,8 @@ async function initBooster(): Promise<void> {
       boosterInstance = null;
       boosterModule = null;
       loadedBoosterPath = null;
+      // Allow a later call to retry (e.g. after the package became available).
+      boosterInitPromise = null;
     }
   })();
   

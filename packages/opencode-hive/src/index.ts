@@ -87,7 +87,7 @@ import { CODEBASE_ANALYZER_PROMPT } from './agents/codebase-analyzer.js';
 import { buildCustomSubagents } from './agents/custom-agents.js';
 import { createBuiltinMcps } from './mcp/index.js';
 import { ensureRtkInstalled, isRtkOnPath } from './utils/rtk-installer.js';
-import { ensureToolsInstalled, getHiveBinPath } from './utils/tool-installer.js';
+import { getHiveBinPath } from './utils/tool-installer.js';
 import { ensureHivePathInShellConfig } from './utils/shell-path.js';
 import { ensureCodegraphInit } from './utils/codegraph-init.js';
 import type { CodegraphInitResult } from './utils/codegraph-init.js';
@@ -283,17 +283,12 @@ function prefixWithRtk(command: string, rtkCommand = 'rtk'): string {
 }
 
 let rtkBootPromise: Promise<string> | null = null;
-let toolsBootPromise: Promise<{ installed: string[]; failed: string[] }> | null = null;
 let lspBootPromise: Promise<import('./services/lsp-autoinstall.js').LspServerResult[]> | null = null;
 let codegraphBootPromise: Promise<CodegraphInitResult> | null = null;
 
 function getRtkBootPromise(): Promise<string> {
   if (!rtkBootPromise) rtkBootPromise = ensureRtkInstalled();
   return rtkBootPromise;
-}
-function getToolsBootPromise(): Promise<{ installed: string[]; failed: string[] }> {
-  if (!toolsBootPromise) toolsBootPromise = ensureToolsInstalled();
-  return toolsBootPromise;
 }
 function getLspBootPromise(): Promise<import('./services/lsp-autoinstall.js').LspServerResult[]> {
   if (!lspBootPromise) lspBootPromise = ensureLspServers();
@@ -423,8 +418,11 @@ const plugin = Plugin.define({
     console.log(`[hive:shell-path] Added PATH to: ${pathResult.added.join(', ')}`);
   }
 
+  // Tool packages (@sparkleideas/agent-booster, bun-pty, auto-cr-cmd, btca)
+  // are no longer installed from setup: a plugin load must not reach the
+  // network, and a failing install must not change that load's outcome. They
+  // install on first use; hive_status shows what is still missing.
   void getRtkBootPromise().catch(() => {});
-  void getToolsBootPromise().catch(() => {});
   void getLspBootPromise().catch(() => {});
   void getCodegraphBootPromise(directory).catch(() => {});
 

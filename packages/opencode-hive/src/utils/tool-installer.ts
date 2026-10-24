@@ -12,10 +12,11 @@ import { shouldSkipAutoInstall } from './skip-install.js';
 
 const asyncExec = promisify(exec);
 
-/** Node/npm runtimes to probe when choosing the installer (first match wins). */
-const NODE_RUNTIME_NAMES = ['node', 'bun'];
+/** Package managers probed for auto-install, in order of preference. */
+const INSTALL_COMMANDS = ['npm', 'bun'] as const;
+type InstallCommand = (typeof INSTALL_COMMANDS)[number];
 
-/** Whether a runtime/package-manager command is available to spawn. */
+/** Whether a command is spawnable from the given PATH. */
 function isExecutableOnPath(name: string, envPath: string = process.env.PATH ?? ''): boolean {
   const dirs = envPath.split(path.delimiter).filter(Boolean);
   return dirs.some((dir) => {
@@ -29,22 +30,16 @@ function isExecutableOnPath(name: string, envPath: string = process.env.PATH ?? 
 }
 
 /**
- * Pick the package manager used for auto-install.
+ * Which package manager would be used for auto-install, given a PATH.
  *
- * `bun` is preferred but not required: `bun pm bin -g` and `bun test` do not
- * put `bun` on PATH (see the CI workflow, which only installs Bun), while npm
- * ships with Node. Returning null means no installer is available and the
- * tools must degrade gracefully instead of logging a hard failure.
+ * Exported for `hive_status` diagnostics and tests only: auto-install itself
+ * no longer leaves plugin setup, so nothing here runs during `bun test`.
  */
 export function resolveInstaller(
   envPath: string = process.env.PATH ?? '',
 ): { command: 'npm' | 'bun add'; label: 'npm' | 'bun' } | null {
-  if (NODE_RUNTIME_NAMES.some((runtime) => isExecutableOnPath(runtime, envPath)) && isExecutableOnPath('npm', envPath)) {
-    return { command: 'npm', label: 'npm' };
-  }
-  if (isExecutableOnPath('bun', envPath)) {
-    return { command: 'bun add', label: 'bun' };
-  }
+  if (isExecutableOnPath('npm', envPath)) return { command: 'npm', label: 'npm' };
+  if (isExecutableOnPath('bun', envPath)) return { command: 'bun add', label: 'bun' };
   return null;
 }
 
@@ -181,12 +176,27 @@ export function isToolAvailable(name: string): boolean {
   return (tool.binaries ?? []).some(b => isCliAvailable(b));
 }
 
+export interface ToolInstallStatus {
+  /** Tools installed by this run. */
+  installed: string[];
+  /** Tools the installer could not provide. */
+  failed: string[];
+  /** Tools left alone because no installer is available or auto-install is off. */
+  skipped: string[];
+}
+
 /**
- * Auto-install all tools into the hive packages directory.
- * Agent Tools land in node_modules for require() resolution.
- * CLI Tools get binaries symlinked to hive/bin/ for PATH access.
+ * Install the tools that are not resolvable yet.
+ *
+ * Never called during plugin setup: a plugin load (a `bun test` file, an
+ * offline run, a plain edit) must not reach the network, and a failing install
+ * must not change that load's outcome. Tools install on first use instead
+ * (`ensureToolInstalled`) and `hive_status` reports what is missing.
+ *
+ * Agent Tools land in node_modules for require() resolution; CLI Tools get
+ * binaries symlinked to hive/bin/ for PATH access.
  */
-export async function ensureToolsInstalled(): Promise<{ installed: string[]; failed: string[] }> {
+export async function ensureToolsInstalled(): Promise<ToolInstallStatus> {
   // Cleanup stale binaries from removed tools (e.g. dora after 1.20.1)
   try {
     const staleBins = ['dora'];
@@ -199,89 +209,95 @@ export async function ensureToolsInstalled(): Promise<{ installed: string[]; fai
     }
   } catch {}
   if (shouldSkipAutoInstall()) {
-    return { installed: [], failed: [] };
+    return { installed: [], failed: [], skipped: [] };
   }
-  const installed: string[] = [];
-  const failed: string[] = [];
 
   const toInstall = installableTools().filter(t => !isToolAvailable(t.name));
   if (toInstall.length === 0) {
-    return { installed: [], failed: [] };
+    return { installed: [], failed: [], skipped: [] };
   }
 
+  // No installer means no network by design: the tools degrade gracefully, so
+  // this stays quiet instead of warning on every load.
   const installer = resolveInstaller();
   if (!installer) {
-    console.warn('[hive:installer] No npm or bun on PATH; skipping tool auto-install (tools degrade gracefully)');
-    return { installed: [], failed: toInstall.map(t => t.name) };
+    return { installed: [], failed: [], skipped: toInstall.map(t => t.name) };
   }
 
-  console.log(`[hive:installer] Auto-installing ${toInstall.length} tool(s) via ${installer.label}: ${toInstall.map(t => t.name).join(', ')}`);
+  return installTools(toInstall, installer);
+}
+
+/** Install missing tools one at a time, skipping any that cannot be provided. */
+async function installTools(
+  tools: ToolEntry[],
+  installer: NonNullable<ReturnType<typeof resolveInstaller>>,
+): Promise<ToolInstallStatus> {
+  const installed: string[] = [];
+  const failed: string[] = [];
 
   fs.mkdirSync(PACKAGES_DIR, { recursive: true });
   fs.mkdirSync(BIN_DIR, { recursive: true });
 
-  const packageNames = toInstall.map(t => t.version ? `${t.name}@${t.version}` : t.name);
-  try {
-    const installCommand = installer.command === 'npm'
-      ? `npm install --prefix "${PACKAGES_DIR}" --no-package-lock --no-save ${packageNames.join(' ')}`
-      : `bun add --cwd "${PACKAGES_DIR}" --no-save ${packageNames.join(' ')}`;
-    await asyncExec(installCommand, { timeout: 120000 });
-
-    for (const tool of toInstall) {
-      if (tool.category === 'cli' && tool.binaries) {
-        // Link every declared binary. When a declared bin name is missing from
-        // node_modules/.bin (e.g. `auto-cr-cmd` ships only `check`), alias it
-        // to the first source that exists so both names stay callable.
-        const sources = tool.binaries.map((bin) => path.join(NODE_MODULES_DIR, '.bin', bin));
-        const primarySource = sources.find((src) => fs.existsSync(src));
-        for (let i = 0; i < tool.binaries.length; i++) {
-          const target = path.join(BIN_DIR, tool.binaries[i]);
-          if (fs.existsSync(target)) continue;
-          const linkSource = fs.existsSync(sources[i]) ? sources[i] : primarySource;
-          if (!linkSource) continue;
-          try {
-            fs.symlinkSync(linkSource, target);
-          } catch {
-            fs.copyFileSync(linkSource, target);
-            fs.chmodSync(target, 0o755);
-          }
-        }
-      }
+  for (const tool of tools) {
+    const spec = tool.version ? `${tool.name}@${tool.version}` : tool.name;
+    const command = installer.command === 'npm'
+      ? `npm install --prefix "${PACKAGES_DIR}" --no-package-lock --no-save ${spec}`
+      : `bun add --cwd "${PACKAGES_DIR}" --no-save ${spec}`;
+    try {
+      await asyncExec(command, { timeout: 120000 });
+      installed.push(tool.name);
+      if (tool.category === 'cli' && tool.binaries) linkToolBinaries(tool);
+    } catch {
+      // A package the registry cannot satisfy (an unpublished `@alpha`
+      // dependency, a yanked version) must not block the tools after it.
+      failed.push(tool.name);
     }
-
-    const names = toInstall.map(t => t.name);
-    console.log(`[hive:installer] Installed: ${names.join(', ')}`);
-    installed.push(...names);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    // A package the registry cannot satisfy (e.g. a transitive `@alpha`
-    // dependency that was never published) must not block the rest of the
-    // batch on every start: retry one by one and report what fails.
-    if (toInstall.length > 1) {
-      for (const tool of toInstall) {
-        const spec = tool.version ? `${tool.name}@${tool.version}` : tool.name;
-        try {
-          const singleCommand = installer.command === 'npm'
-            ? `npm install --prefix "${PACKAGES_DIR}" --no-package-lock --no-save ${spec}`
-            : `bun add --cwd "${PACKAGES_DIR}" --no-save ${spec}`;
-          await asyncExec(singleCommand, { timeout: 120000 });
-          installed.push(tool.name);
-        } catch {
-          failed.push(tool.name);
-        }
-      }
-      if (installed.length > 0) {
-        console.log(`[hive:installer] Installed individually via ${installer.label}: ${installed.join(', ')}`);
-      }
-      if (failed.length > 0) {
-        console.warn(`[hive:installer] Failed individually: ${failed.join(', ')} (tools fall back to graceful degradation)`);
-      }
-      return { installed, failed };
-    }
-    console.warn(`[hive:installer] Install failed: ${message}`);
-    console.warn('[hive:installer] Tools will fall back to graceful degradation');
-    failed.push(...packageNames);
   }
 
-  return { installed, failed };
+  if (installed.length > 0) {
+    console.log(`[hive:installer] Installed via ${installer.label}: ${installed.join(', ')}`);
+  }
+  if (failed.length > 0) {
+    console.warn(`[hive:installer] Unavailable: ${failed.join(', ')} (those tools degrade gracefully)`);
+  }
+  return { installed, failed, skipped: [] };
+}
+
+/**
+ * Link every declared binary of a CLI tool. When a declared bin name is
+ * missing from node_modules/.bin (e.g. `auto-cr-cmd` ships only `check`),
+ * alias it to the first source that exists so both names stay callable.
+ */
+function linkToolBinaries(tool: ToolEntry): void {
+  const binaries = tool.binaries ?? [];
+  const sources = binaries.map((bin) => path.join(NODE_MODULES_DIR, '.bin', bin));
+  const primarySource = sources.find((src) => fs.existsSync(src));
+  for (let i = 0; i < binaries.length; i++) {
+    const target = path.join(BIN_DIR, binaries[i]);
+    if (fs.existsSync(target)) continue;
+    const linkSource = fs.existsSync(sources[i]) ? sources[i] : primarySource;
+    if (!linkSource) continue;
+    try {
+      fs.symlinkSync(linkSource, target);
+    } catch {
+      fs.copyFileSync(linkSource, target);
+      fs.chmodSync(target, 0o755);
+    }
+  }
+}
+
+/**
+ * Make sure one tool is available, installing it on first use.
+ *
+ * Callers are tool implementations that genuinely need the package, so this is
+ * where the network is allowed. Returns true when the tool can be used.
+ */
+export async function ensureToolInstalled(name: string): Promise<boolean> {
+  if (isToolAvailable(name)) return true;
+  const tool = TOOLS.find((t) => t.name === name);
+  if (!tool || tool.disabledReason || shouldSkipAutoInstall()) return false;
+  const installer = resolveInstaller();
+  if (!installer) return false;
+  const { installed } = await installTools([tool], installer);
+  return installed.includes(name);
 }

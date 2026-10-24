@@ -18,14 +18,10 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      # `bun test` loads the plugin, whose setup auto-installs tool packages with
-      # npm and reads `npm root -g`; without Node those steps degrade silently.
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      # `bun` is not on PATH here (setup-bun only exposes the binary it runs).
+      # Fixes runs of 2.0.1–2.0.3, where `bun test` failed with
+      # "Cannot find module '@opencode/plugin'": setup-bun exposes the binary to
+      # this action only, so `bun test` ran under a different bun than
+      # `bun install` and the workspace link was not found.
       - name: Put bun on PATH for the test run
         run: echo "$(dirname "$(command -v bun)")" >> "$GITHUB_PATH"
 
