@@ -38,9 +38,11 @@ jobs:
       - name: Probe
         working-directory: packages/opencode-hive
         run: |
-          set +e
-          echo "### pwd=$(pwd) bun=$(command -v bun)"
-          bun --version; echo "bun --version rc=$?"
-          ls -d node_modules 2>&1; echo "ls rc=$?"
-          bun test ./src/agents/custom-agents.test.ts; echo "custom-agents rc=$?"
-          ls /tmp/oc-test.log 2>&1
+          echo "pwd=$(pwd)"
+          echo "bun=$(command -v bun 2>&1)"
+          bun --version
+          echo "bun --version rc=$?"
+          ls -d node_modules 2>&1
+          echo "ls rc=$?"
+          ls -d ../../node_modules/@opencode 2>&1
+          echo "ls2 rc=$?"
