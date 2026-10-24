@@ -50,9 +50,16 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
+      # Same shape as CI: the e2e suites `git init` + `git commit`, and the
+      # runner image has no commit identity unless the workflow sets one.
+      - name: Configure git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Test opencode-hive
         working-directory: packages/opencode-hive
-        run: bun test
+        run: bun test --timeout 30000
 
       - name: Build opencode-hive
         working-directory: packages/opencode-hive
