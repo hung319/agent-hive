@@ -17,19 +17,41 @@ import * as path from 'path';
  * - ast_grep_analyze_imports: Analyze imports
  */
 
-// Lazy-load @ast-grep/napi to handle optional dependency gracefully
+// Lazy-load @ast-grep/napi to handle the native module gracefully: a failed
+// download of the platform binary must degrade these tools, not the plugin.
 let astGrepModule: typeof import('@ast-grep/napi') | null = null;
+let astGrepLoadError: string | null = null;
 
 async function loadAstGrep() {
   if (astGrepModule) return astGrepModule;
   try {
     astGrepModule = await import('@ast-grep/napi');
     return astGrepModule;
-  } catch {
-    throw new Error(
-      '@ast-grep/napi not available. Install it: npm install @ast-grep/napi'
-    );
+  } catch (error) {
+    astGrepLoadError = error instanceof Error ? error.message : String(error);
+    return null;
   }
+}
+
+/**
+ * JSON body every ast_grep_* tool returns when the native module is missing.
+ *
+ * The plugin still loads and every non-AST tool keeps working, so the message
+ * names the affected tools and the way out instead of only a package name.
+ */
+function unavailableResult(tool: string): string {
+  return JSON.stringify({
+    success: false,
+    error: 'ast-grep native module unavailable',
+    tool,
+    reason: astGrepLoadError,
+    alternatives: [
+      'code_search: keyword search without AST (always available)',
+      'grep / Grep: plain pattern search',
+      'call_graph_extract: regex-based call extraction',
+    ],
+    fix: 'Reinstall the plugin so its optional platform binary is fetched, e.g. npm install -g @hung319/opencode-hive',
+  }, null, 2);
 }
 
 /**
@@ -126,6 +148,7 @@ ast_grep_find_code({ pattern: "export default function $NAME($$$)", lang: "javas
   async execute(args) {
     try {
       const astGrep = await loadAstGrep();
+      if (!astGrep) return unavailableResult('ast_grep_find_code');
       const { parse, Lang } = astGrep;
       const searchPath = path.resolve(args.path ?? '.');
       const extensions = (args.extensions ?? '.ts,.tsx,.js,.jsx').split(',').map(e => e.trim());
@@ -238,6 +261,7 @@ ast_grep_rewrite_code({
   async execute(args) {
     try {
       const astGrep = await loadAstGrep();
+      if (!astGrep) return unavailableResult('ast_grep_rewrite_code');
       const { parse } = astGrep;
       const searchPath = path.resolve(args.path ?? '.');
       const extensions = (args.extensions ?? '.ts,.tsx,.js,.jsx').split(',').map(e => e.trim());
@@ -326,6 +350,7 @@ ast_grep_dump_syntax_tree({ path: "src/index.ts", maxDepth: 5 })
   async execute(args) {
     try {
       const astGrep = await loadAstGrep();
+      if (!astGrep) return unavailableResult('ast_grep_dump_syntax_tree');
       const { parse } = astGrep;
       const filePath = path.resolve(args.path);
       const content = fs.readFileSync(filePath, 'utf-8');
@@ -391,6 +416,7 @@ ast_grep_scan_code({ path: "./src" })
   async execute(args) {
     try {
       const astGrep = await loadAstGrep();
+      if (!astGrep) return unavailableResult('ast_grep_scan_code');
       const { parse } = astGrep;
       const searchPath = path.resolve(args.path ?? '.');
       const extensions = (args.extensions ?? '.ts,.tsx,.js,.jsx').split(',').map(e => e.trim());
@@ -486,6 +512,7 @@ ast_grep_analyze_imports({ path: "./src" })
   async execute(args) {
     try {
       const astGrep = await loadAstGrep();
+      if (!astGrep) return unavailableResult('ast_grep_analyze_imports');
       const { parse } = astGrep;
       const searchPath = path.resolve(args.path ?? '.');
       const extensions = (args.extensions ?? '.ts,.tsx,.js,.jsx').split(',').map(e => e.trim());

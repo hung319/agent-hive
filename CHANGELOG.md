@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Fix: `ast_grep_*` trả kết quả có cấu trúc khi **thiếu `@ast-grep/napi`** (native binary tải hỏng / cài thiếu) thay vì ném lỗi thô. Trước đây loader `throw` mà không tool nào bắt, nên cả 5 tool `ast_grep_*` trả exception; nay trả `success: false` kèm `reason`, các lựa chọn thay thế (`code_search`, `grep`, `call_graph_extract`) và cách sửa, plugin và các tool khác vẫn chạy bình thường
 
 ## [2.0.3] - 2026-10-24
 - Fix: agent được cài **một lần ở global** (`$XDG_CONFIG_HOME/opencode/agents`, mặc định `~/.config/opencode/agents`) thay vì ghi `<project>/.opencode/agents` mỗi lần mở project như 2.0.0–2.0.2; override bằng `OPENCODE_AGENTS_DIR`
