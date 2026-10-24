@@ -42,15 +42,6 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: E2E suites
-        working-directory: packages/opencode-hive
-        run: |
-          for f in src/e2e/*.test.ts; do
-            bun test "$f" --timeout 30000 > "/tmp/log-$(basename "$f" .test.ts).txt" 2>&1
-            echo "$f exit=$? log=/tmp/log-$(basename "$f" .test.ts).txt"
-          done
-          true
-
       # Plugin setup no longer installs packages, so no network is needed here.
       - name: Test opencode-hive
         working-directory: packages/opencode-hive
