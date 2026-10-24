@@ -35,8 +35,6 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      # The e2e suites `git init` + `git commit`; the runner image can lack a
-      # commit identity, which aborts setup before any assertion runs.
       - name: Configure git identity
         run: |
           git config --global user.name "github-actions[bot]"
@@ -46,19 +44,28 @@ jobs:
         working-directory: packages/opencode-hive
         env:
           HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: |
-          files=$(ls src/e2e/*.test.ts)
-          echo "files: $files"
-          fails=0
-          for f in $files; do
-            out=/tmp/e2e-$(basename "$f").log
-            bun test "$f" > "$out" 2>&1
-            rc=$?
-            echo "== $f rc=$rc"
-            [ $rc -ne 0 ] && { fails=$((fails+1)); grep -n -E '^\(fail\)|error:' "$out" | head -3; }
-          done
-          echo "e2e failures: $fails"
+        run: bun test src/e2e/custom-agent-docs-example.test.ts
 
-      - name: Build opencode-hive
+      - name: T2 agent-mode
         working-directory: packages/opencode-hive
-        run: bun run build
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test src/e2e/agent-mode.test.ts
+
+      - name: T3 config-autoload
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test src/e2e/config-autoload-skills.test.ts
+
+      - name: T4 plugin-smoke
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test src/e2e/plugin-smoke.test.ts
+
+      - name: T5 runtime-smoke
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test src/e2e/opencode-runtime-smoke.test.ts
