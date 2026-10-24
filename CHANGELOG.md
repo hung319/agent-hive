@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-10-24
+- Fix: agent được cài **một lần ở global** (`$XDG_CONFIG_HOME/opencode/agents`, mặc định `~/.config/opencode/agents`) thay vì ghi `<project>/.opencode/agents` mỗi lần mở project như 2.0.0–2.0.2; override bằng `OPENCODE_AGENTS_DIR`
+- Fix: setup dọn các file agent do bản 2.x cũ để lại trong `<project>/.opencode/agents/` (chỉ đúng tên agent của Hive, giữ agent người dùng tự viết; xoá thư mục `agents` nếu rỗng)
+- Fix: `hive_code_edit` thật sự dùng `@sparkleideas/agent-booster` — resolve đúng API (`apply` tên riêng hoặc `new AgentBooster()`), trước đây gọi nhầm `Function.prototype.apply` nên luôn ném lỗi rồi âm thầm thay chuỗi; chỉ ghi file khi kết quả chứa `newContent`, loại kết quả fuzzy dưới confidence 0.6, lỗi booster quay về thay chuỗi tất định
+- Fix: `hive_booster_status` báo đúng năng lực (`editing`, `capabilities { apply, lazyApply }`, `notes`) thay vì luôn `available: true`; `hive_lazy_edit` ghép marker bằng code của Hive vì package không có `lazyApply`
+- Fix: đường dẫn gói booster tính lại theo `HOME`/`XDG_CONFIG_HOME` của session, không cache từ lúc nạp module
+- Fix: frontmatter agent không còn dòng permission trùng do alias v1 (`edit` ×2, `subagent` ×2)
+- Tests: **642 pass / 0 fail** (opencode-hive), **150 pass / 0 fail** (hive-core), `tsc --noEmit` sạch, build dist 1.13 MB; verify trên OpenCode 2.1.4 thật với config/HOME cô lập (project mới không sinh `.opencode/agents`, `hive_code_edit` → `Applied via agent-booster (fuzzy_replace, confidence 0.77)`)
+
 ## [2.0.2] - 2026-10-24
 - Fix: khôi phục hành vi v1 cho agent — `build` và `plan` được hạ về `mode: "subagent"` qua `agentEditor.update`, để `zetta` là agent primary duy nhất người dùng thấy; các agent hệ thống ẩn (`compaction`, `title`, `summary`) vẫn giữ `primary` (hạ chúng làm `opencode run` lỗi `AgentNotFoundError`)
 - Fix: ngừng ghi `temperature` vào frontmatter agent `.md` — OpenCode 2.1 không còn hỗ trợ field này và log `ignored unsupported agent fields: ["temperature"]` cho mọi agent mỗi lần khởi động; `temperature` trong `agent_hive.json` vẫn được nhận để tương thích
