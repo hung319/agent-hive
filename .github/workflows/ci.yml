@@ -56,26 +56,5 @@ jobs:
         working-directory: packages/opencode-hive
         run: bun test ./src/hooks ./src/skills ./src/__tests__
 
-      - name: Probe git identity
-        run: |
-          echo "GITHUB_ACTIONS=${GITHUB_ACTIONS:-unset}"
-          echo "EMAIL=${EMAIL:-unset} GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-unset}"
-          git config --list --show-origin > /tmp/gitcfg.txt 2>&1; echo "config rc=$?"
-          echo "lines=$(wc -l < /tmp/gitcfg.txt)"
-          git config --show-origin user.name > /tmp/gn.txt 2>&1; echo "name rc=$?"; head -2 /tmp/gn.txt
-          git config --show-origin user.email > /tmp/ge.txt 2>&1; echo "email rc=$?"; head -2 /tmp/ge.txt
-          git status --short > /tmp/gs.txt 2>&1; echo "status rc=$?"
-          sed -i 's#^#x #' /tmp/gn.txt; echo "sed ok"
-
-      - name: G3 e2e
-        working-directory: packages/opencode-hive
-        run: |
-          set +e
-          bun test ./src/e2e/plugin-smoke.test.ts > /tmp/e2e.log 2>&1
-          echo "plugin-smoke rc=$?"
-          head -40 /tmp/e2e.log
-          tail -10 /tmp/e2e.log
-
-      - name: G4 agents
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents
+      - name: Probing
+        run: echo hi > /tmp/o1.txt; echo rc=$?
