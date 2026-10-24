@@ -58,13 +58,15 @@ jobs:
         working-directory: packages/opencode-hive
         run: bun test ./src/hooks
 
-      - name: Test opencode-hive (harness)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/__tests__
-
       - name: Test opencode-hive (e2e)
         working-directory: packages/opencode-hive
         run: bun test ./src/e2e
+
+      # The V2 harness drives plugin setup, which writes into the repo it runs
+      # from (and into /tmp); keep it after the plain unit files.
+      - name: Test opencode-hive (harness)
+        working-directory: packages/opencode-hive
+        run: bun test ./src/__tests__
 
       - name: Build opencode-hive
         working-directory: packages/opencode-hive
