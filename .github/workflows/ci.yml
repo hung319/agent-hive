@@ -18,6 +18,8 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      # setup-bun only puts its binary on PATH for the action's own step, while
+      # `bun install`, the build scripts and `bun test` spawn `bun` themselves.
       - name: Put bun on PATH
         run: echo "$(dirname "$(command -v bun)")" >> "$GITHUB_PATH"
 
@@ -35,11 +37,32 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: Test opencode-hive
+      # Listed file by file (order matters: this resolution breaks when one of
+      # these runs after other test files in the same process).
+      - name: Test opencode-hive (agent files)
         working-directory: packages/opencode-hive
-        run: bun test --timeout 30000
+        run: |
+          bun test ./src/agents/custom-agents.test.ts
+          bun test ./src/agents/global-agents.test.ts
+          bun test ./src/agents/permissions.test.ts
+          bun test ./src/agents/prompts.test.ts
+
+      - name: Test opencode-hive (skills)
+        working-directory: packages/opencode-hive
+        run: bun test ./src/skills
+
+      - name: Test opencode-hive (hooks)
+        working-directory: packages/opencode-hive
+        run: bun test ./src/hooks
+
+      - name: Test opencode-hive (harness)
+        working-directory: packages/opencode-hive
+        run: bun test ./src/__tests__
+
+      - name: Test opencode-hive (e2e)
+        working-directory: packages/opencode-hive
+        run: bun test ./src/e2e
 
       - name: Build opencode-hive
         working-directory: packages/opencode-hive
         run: bun run build
-
