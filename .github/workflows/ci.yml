@@ -38,3 +38,10 @@ jobs:
       - name: Test opencode-hive
         working-directory: packages/opencode-hive
         run: bun test
+
+      - name: Probe codegraph
+        working-directory: packages/opencode-hive
+        run: |
+          bun -e 'import("./src/utils/codegraph-installer.ts").then(m => console.log("resolve:", JSON.stringify(m.resolveCodegraphMcpCommand())))' || echo "import failed"
+          ls ../../node_modules/@colbymchenry/codegraph 2>&1 | head -3
+          command -v node; echo "node rc=$?"
