@@ -42,30 +42,76 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Utils+services+tools
+      - name: P src/utils/auto-recall.test.ts
         working-directory: packages/opencode-hive
         env:
           HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/utils ./src/services ./src/tools ./src/mcp ./src/templates --timeout 30000
-
-      - name: Hooks+skills+harness
+        run: bun test ./src/utils/auto-recall.test.ts --timeout 30000
+      - name: P src/utils/codegraph-init.test.ts
         working-directory: packages/opencode-hive
         env:
           HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/hooks ./src/skills ./src/__tests__ --timeout 30000
-
-      - name: Agents
+        run: bun test ./src/utils/codegraph-init.test.ts --timeout 30000
+      - name: P src/utils/codegraph-installer.test.ts
         working-directory: packages/opencode-hive
         env:
           HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/agents --timeout 30000
-
-      - name: E2E
+        run: bun test ./src/utils/codegraph-installer.test.ts --timeout 30000
+      - name: P src/utils/format.test.ts
         working-directory: packages/opencode-hive
         env:
           HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/e2e --timeout 30000
-
+        run: bun test ./src/utils/format.test.ts --timeout 30000
+      - name: P src/utils/prompt-budgeting.test.ts
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/utils/prompt-budgeting.test.ts --timeout 30000
+      - name: P src/utils/prompt-file.test.ts
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/utils/prompt-file.test.ts --timeout 30000
+      - name: P src/utils/prompt-observability.test.ts
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/utils/prompt-observability.test.ts --timeout 30000
+      - name: P src/utils/sensitive-data-filter.test.ts
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/utils/sensitive-data-filter.test.ts --timeout 30000
+      - name: P src/utils/tool-installer.test.ts
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/utils/tool-installer.test.ts --timeout 30000
+      - name: P src/utils/worker-prompt.test.ts
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/utils/worker-prompt.test.ts --timeout 30000
+      - name: P src/services/vector-memory.test.ts
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/services/vector-memory.test.ts --timeout 30000
+      - name: P src/tools
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/tools --timeout 30000
+      - name: P src/mcp
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/mcp --timeout 30000
+      - name: P src/templates
+        working-directory: packages/opencode-hive
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test ./src/templates --timeout 30000
       - name: Test opencode-hive (whole suite)
         working-directory: packages/opencode-hive
         env:
