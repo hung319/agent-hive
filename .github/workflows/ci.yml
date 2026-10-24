@@ -35,35 +35,19 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      # Bisect: which group turns the suite red on the runner?
-      - name: G1 utils
-        working-directory: packages/opencode-hive
-        run: bun test ./src/utils
-
-      - name: G1b services
-        working-directory: packages/opencode-hive
-        run: bun test ./src/services
-
-      - name: G1c tools
-        working-directory: packages/opencode-hive
-        run: bun test ./src/tools
-
-      - name: G1d mcp+templates
-        working-directory: packages/opencode-hive
-        run: bun test ./src/mcp ./src/templates
-
-      - name: G2 hooks+skills+harness
-        working-directory: packages/opencode-hive
-        run: bun test ./src/hooks ./src/skills ./src/__tests__
-
-      - name: G3 e2e identity
-        working-directory: packages/opencode-hive
+      # The e2e suites `git init` + `git commit`; the runner image can lack a
+      # commit identity, which aborts setup before any assertion runs.
+      - name: Configure git identity
         run: |
-          echo "before: $(git config user.name 2>&1 | head -1)"
-          git status --short > /tmp/gs.txt 2>&1; echo "status rc=$?"
-          echo "after: $(git config user.name 2>&1 | head -1)"
-          true
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: G4 agents
+      - name: Test opencode-hive
         working-directory: packages/opencode-hive
-        run: bun test ./src/agents
+        env:
+          HIVE_DISABLE_AUTO_INSTALL: '1'
+        run: bun test --timeout 30000
+
+      - name: Build opencode-hive
+        working-directory: packages/opencode-hive
+        run: bun run build
