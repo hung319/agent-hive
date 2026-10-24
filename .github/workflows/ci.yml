@@ -39,9 +39,21 @@ jobs:
         working-directory: packages/opencode-hive
         run: bun test ./src/tools ./src/mcp ./src/templates --timeout 30000
 
-      - name: Test opencode-hive (agents)
+      - name: Test opencode-hive (agent: custom)
         working-directory: packages/opencode-hive
-        run: bun test ./src/agents --timeout 30000
+        run: bun test ./src/agents/custom-agents.test.ts --timeout 30000
+
+      - name: Test opencode-hive (agent: global)
+        working-directory: packages/opencode-hive
+        run: bun test ./src/agents/global-agents.test.ts --timeout 30000
+
+      - name: Test opencode-hive (agent: permissions)
+        working-directory: packages/opencode-hive
+        run: bun test ./src/agents/permissions.test.ts --timeout 30000
+
+      - name: Test opencode-hive (agent: prompts)
+        working-directory: packages/opencode-hive
+        run: bun test ./src/agents/prompts.test.ts --timeout 30000
 
       - name: Test opencode-hive (skills)
         working-directory: packages/opencode-hive
