@@ -18,6 +18,9 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      # setup-bun only puts its binary on PATH for the action's own step; the
+      # later steps spawn `bun` as a subprocess (`bun install`, build scripts,
+      # `bun test`).
       - name: Put bun on PATH for the test run
         run: echo "$(dirname "$(command -v bun)")" >> "$GITHUB_PATH"
 
@@ -35,11 +38,24 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
+      # Fresh temp dir per step: several suites chdir into their own sandbox
+      # (e.g. /tmp/hive-e2e-plugin-*), and `set -e` would otherwise abort the
+      # whole script on the first failing `cd`.
       - name: Test opencode-hive
         working-directory: packages/opencode-hive
         run: |
-          bun test 2>&1 | tee /tmp/opencode-hive-test.log
+          set -u
+          logdir=$(mktemp -d "/tmp/hive-ci-XXXXXX")
+          cd /tmp
+          cd "$GITHUB_WORKSPACE/packages/opencode-hive" || exit 1
+          set +e
+          bun test 2>&1 | tee "$logdir/opencode-hive.log"
           rc=${PIPESTATUS[0]}
-          echo "bun test rc=$rc"
-          tail -30 /tmp/opencode-hive-test.log
+          set -e
+          echo "::notice::bun test exit code: $rc"
+          tail -40 "$logdir/opencode-hive.log"
           exit $rc
+
+      - name: Build opencode-hive
+        working-directory: packages/opencode-hive
+        run: bun run build
