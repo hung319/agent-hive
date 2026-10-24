@@ -31,19 +31,22 @@ jobs:
       - name: Reinstall to link workspace packages
         run: bun install
 
+      - name: Test hive-core
+        working-directory: packages/hive-core
+        run: bun test
+
+      # The e2e suites `git init` + `git commit`; the runner image can lack a
+      # commit identity, which aborted setup before any assertion ran.
       - name: Configure git identity
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: P group src/hooks
-        working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test ./src/hooks --timeout 30000
-
+      # Plugin setup no longer installs packages, so no network is needed here.
       - name: Test opencode-hive
         working-directory: packages/opencode-hive
-        env:
-          HIVE_DISABLE_AUTO_INSTALL: '1'
         run: bun test --timeout 30000
+
+      - name: Build opencode-hive
+        working-directory: packages/opencode-hive
+        run: bun run build
