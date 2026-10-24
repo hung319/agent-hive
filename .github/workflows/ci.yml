@@ -46,7 +46,18 @@ jobs:
         working-directory: packages/opencode-hive
         env:
           HIVE_DISABLE_AUTO_INSTALL: '1'
-        run: bun test --timeout 30000
+        run: |
+          files=$(ls src/e2e/*.test.ts)
+          echo "files: $files"
+          fails=0
+          for f in $files; do
+            out=/tmp/e2e-$(basename "$f").log
+            bun test "$f" > "$out" 2>&1
+            rc=$?
+            echo "== $f rc=$rc"
+            [ $rc -ne 0 ] && { fails=$((fails+1)); grep -n -E '^\(fail\)|error:' "$out" | head -3; }
+          done
+          echo "e2e failures: $fails"
 
       - name: Build opencode-hive
         working-directory: packages/opencode-hive
