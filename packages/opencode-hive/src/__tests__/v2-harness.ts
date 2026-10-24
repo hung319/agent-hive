@@ -54,22 +54,23 @@ export async function runV2PluginSetup(options?: {
 
   const projectDir = options?.directory ?? fs.mkdtempSync(path.join(os.tmpdir(), 'hive-v2-'));
 
-  // ConfigService reads user config from $HOME/.config/opencode/agent_hive.json.
-  // With an explicit `config` option the harness isolates HOME in a temp dir and
-  // seeds the config there. Otherwise it keeps the ambient HOME untouched so
-  // callers can place agent_hive.json themselves (V1 harness behaviour).
-  const isolateHome = options?.config !== undefined;
+  // ConfigService reads user config from $HOME/.config/opencode/agent_hive.json,
+  // and setup writes the agent definitions to `<config>/agents/`. The harness
+  // always points HOME at a temp dir: a caller that passed `config` gets it
+  // seeded there, and a caller that set HOME itself (the e2e suites seed
+  // `<testRoot>/.config/opencode`) keeps that dir as the harness HOME, so
+  // reading agents from `harness.homeDir` always sees what setup wrote.
+  // Without this the two halves disagreed: setup wrote to the ambient HOME
+  // while the assertion helpers read the caller's temp HOME (undefined on CI).
   const previousHome = process.env.HOME;
-  const homeDir = isolateHome
-    ? fs.mkdtempSync(path.join(os.tmpdir(), 'hive-v2-home-'))
-    : (previousHome ?? '');
-  if (isolateHome) process.env.HOME = homeDir;
+  const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hive-v2-home-'));
+  const homeDir = options?.config !== undefined ? isolatedHome : (previousHome || isolatedHome);
+  process.env.HOME = homeDir;
 
   const harness: V2Harness = {
     projectDir,
     homeDir,
     restoreHome: () => {
-      if (!isolateHome) return;
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;
     },
@@ -169,22 +170,34 @@ function unwrapCleanups(cleanup: unknown): Array<() => void> {
 }
 
 /**
+ * Directory holding the generated agent definitions for this harness, resolved
+ * exactly like setup does — `OPENCODE_AGENTS_DIR` override, else
+ * `<configRoot>/agents` where configRoot honours `XDG_CONFIG_HOME`.
+ *
+ * The harness HOME is passed explicitly instead of read from the environment,
+ * so a suite that restores HOME before asserting still reads the dir setup
+ * actually wrote to.
+ */
+export function agentsDirOf(harness: Pick<V2Harness, 'homeDir'>): string {
+  const override = process.env.OPENCODE_AGENTS_DIR?.trim();
+  if (override) return override;
+  const xdg = process.env.XDG_CONFIG_HOME?.trim();
+  const configRoot = xdg
+    ? path.join(xdg, 'opencode')
+    : path.join(harness.homeDir, '.config', 'opencode');
+  return path.join(configRoot, 'agents');
+}
+
+/**
  * Build the legacy V1 `config.agent` record from the generated V2 agent
  * definitions: each `<config>/agents/<id>.md` body becomes `prompt`.
- * Agent files are global (one install per machine), so they are read from the
- * harness's isolated `$HOME` for isolated runs and from the ambient user config
- * for runs that keep the real HOME.
  */
 export function agentPromptProxy(
   harness: Pick<V2Harness, 'projectDir' | 'homeDir'>,
 ): Record<string, { prompt: string }> {
   const out: Record<string, { prompt: string }> = {};
-  const candidates = [
-    path.join(harness.homeDir, '.config', 'opencode', 'agents'),
-    path.join(harness.projectDir, '.opencode', 'agents'),
-  ];
-  const dir = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!dir) return out;
+  const dir = agentsDirOf(harness);
+  if (!fs.existsSync(dir)) return out;
   for (const entry of fs.readdirSync(dir)) {
     if (!entry.endsWith('.md')) continue;
     const id = entry.replace(/\.md$/, '');

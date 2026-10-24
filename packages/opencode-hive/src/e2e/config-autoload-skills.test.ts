@@ -5,6 +5,7 @@ import * as path from "path";
 import {
   runV2PluginSetup,
   agentPromptProxy,
+  agentsDirOf,
 } from "../__tests__/v2-harness.js";
 import { BUILTIN_SKILLS } from "../skills/registry.generated.js";
 
@@ -44,7 +45,7 @@ const TEST_ROOT_BASE = "/tmp/hive-config-autoload-skills-test";
  * record the `hooks.config` hook used to mutate.
  */
 function agentPromptsFromMd(harness: V2Harness): Record<string, { prompt: string }> {
-  const dir = path.join(harness.homeDir, ".config", "opencode", "agents");
+  const dir = agentsDirOf(harness);
   const record: Record<string, { prompt: string }> = {};
   for (const file of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
     if (!file.endsWith(".md")) continue;
@@ -83,11 +84,12 @@ describe("config hook autoLoadSkills injection", () => {
   });
 
   it("injects default autoLoadSkills into agent prompt in config hook (unified mode)", async () => {
-    const configPath = path.join(testRoot, ".config", "opencode", "agent_hive.json");
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
+    // The config must live in the temp HOME this test sets *before* setup runs:
+    // setup resolves the config dir from HOME, so a config written anywhere
+    // else is silently ignored.
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: {
         agentMode: "unified",
         agents: {
           "zetta": {
@@ -97,10 +99,8 @@ describe("config hook autoLoadSkills injection", () => {
             autoLoadSkills: ["test-driven-development", "verification-before-completion"]
           }
         },
-      }),
-    );
-
-    const harness = await runV2PluginSetup({ directory: testRoot });
+      },
+    });
     // Was V1 hooks.config(...) -> V2 generated agent definitions
     const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
@@ -126,11 +126,9 @@ describe("config hook autoLoadSkills injection", () => {
   });
 
   it("registers custom subagents and injects custom-subagent appendix in unified mode", async () => {
-    const configPath = path.join(testRoot, ".config", "opencode", "agent_hive.json");
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: {
         agentMode: "unified",
         agents: {
           "zetta": {
@@ -152,10 +150,8 @@ describe("config hook autoLoadSkills injection", () => {
             autoLoadSkills: [],
           },
         },
-      }),
-    );
-
-    const harness = await runV2PluginSetup({ directory: testRoot });
+      },
+    });
     // Was V1 hooks.config(...) -> V2 generated agent definitions
     const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
@@ -178,11 +174,9 @@ describe("config hook autoLoadSkills injection", () => {
   });
 
   it("injects user-configured autoLoadSkills into agent prompt in config hook", async () => {
-    const configPath = path.join(testRoot, ".config", "opencode", "agent_hive.json");
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: {
         agentMode: "unified",
         agents: {
           // Add brainstorming (not a default for forager) on top of defaults
@@ -190,10 +184,8 @@ describe("config hook autoLoadSkills injection", () => {
             autoLoadSkills: ["brainstorming"],
           },
         },
-      }),
-    );
-
-    const harness = await runV2PluginSetup({ directory: testRoot });
+      },
+    });
     // Was V1 hooks.config(...) -> V2 generated agent definitions
     const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 

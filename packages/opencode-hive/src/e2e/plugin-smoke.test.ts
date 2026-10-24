@@ -17,6 +17,7 @@ import {
   execTool,
   createV2ToolContext,
   disposeHarness,
+  agentsDirOf,
   type V2Harness,
 } from "../__tests__/v2-harness.js";
 import { BUILTIN_SKILLS } from "../skills/registry.generated.js";
@@ -318,11 +319,9 @@ Do it
   });
 
   it("returns forager-derived eligible agents for worktree execution delegation", async () => {
-    const configPath = path.join(process.env.HOME || "", ".config", "opencode", "agent_hive.json");
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: {
         customAgents: {
           "forager-ui": {
             baseAgent: "forager-worker",
@@ -335,10 +334,8 @@ Do it
             autoLoadSkills: [],
           },
         },
-      }),
-    );
-
-    const harness = await runV2PluginSetup({ directory: testRoot });
+      },
+    });
     const execToolRef = (name: string, args: unknown, toolContext: ToolContext) =>
       execTool(harness, name, args, toolContext);
     const toolContext = createToolContext("sess_task_mode_custom_agents");
@@ -690,11 +687,9 @@ Do it
   });
 
   it("system prompt hook injects Hive instructions", async () => {
-    const configPath = path.join(process.env.HOME || "", ".config", "opencode", "agent_hive.json");
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: {
         agents: {
           "zetta": {
             autoLoadSkills: ["brainstorming"],
@@ -712,9 +707,8 @@ Do it
             autoLoadSkills: [],
           },
         },
-      }),
-    );
-    const harness = await runV2PluginSetup({ directory: testRoot });
+      },
+    });
     const execToolRef = (name: string, args: unknown, toolContext: ToolContext) =>
       execTool(harness, name, args, toolContext);
 
@@ -734,7 +728,7 @@ Do it
 
     // Auto-loaded skills/custom subagents land in the generated agent definition body
     const agentMd = (name: string) =>
-      fs.readFileSync(path.join(harness.homeDir, ".config", "opencode", "agents", `${name}.md`), "utf-8");
+      fs.readFileSync(path.join(agentsDirOf(harness), `${name}.md`), "utf-8");
     const agentBody = (name: string) => agentMd(name).split("---").slice(2).join("---");
 
     // Skills are referenced via hive_skill("...") - on-demand loading
@@ -1243,7 +1237,7 @@ Do it
     expect(parallelExplorationSkill).toBeDefined();
 
     // V2: agent prompts are generated into the global `<config>/agents/*.md` bodies
-    const agentsDir = path.join(harness.homeDir, ".config", "opencode", "agents");
+    const agentsDir = agentsDirOf(harness);
     const agentBody = (id: string) =>
       fs.readFileSync(path.join(agentsDir, `${id}.md`), "utf-8").split("---").slice(2).join("---");
 

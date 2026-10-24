@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { runV2PluginSetup, type V2Harness } from '../__tests__/v2-harness.js';
+import { runV2PluginSetup, agentsDirOf, type V2Harness } from '../__tests__/v2-harness.js';
 
 const TEST_ROOT_BASE = '/tmp/hive-custom-agent-docs-example-test';
 const README_PATH = path.resolve(import.meta.dir, '..', '..', 'README.md');
@@ -33,7 +33,7 @@ const publishedExample = {
  * `temperature`) and the body (= prompt).
  */
 function agentMd(harness: V2Harness, id: string): string | undefined {
-  const file = path.join(harness.homeDir, '.config', 'opencode', 'agents', `${id}.md`);
+  const file = path.join(agentsDirOf(harness), `${id}.md`);
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : undefined;
 }
 
@@ -75,11 +75,10 @@ describe('e2e: published custom-agent docs example (V2)', () => {
   });
 
   it('keeps docs example in sync with runtime behavior', async () => {
-    const configPath = path.join(testRoot, '.config', 'opencode', 'agent_hive.json');
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(configPath, JSON.stringify(publishedExample, null, 2));
-
-    const harness = await runV2PluginSetup({ directory: testRoot });
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: publishedExample,
+    });
 
     // Built-in agent overrides are honored: hygienic-reviewer's model override
     // lands in its generated definition.

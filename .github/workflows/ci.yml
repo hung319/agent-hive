@@ -35,8 +35,8 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      # The e2e suites `git init` + `git commit`; the runner image can lack a
-      # commit identity, which aborted setup before any assertion ran.
+      # The e2e suites `git init` + `git commit` under a temp HOME; the runner
+      # image has no commit identity, which aborted setup before any assertion.
       - name: Configure git identity
         run: |
           git config --global user.name "github-actions[bot]"

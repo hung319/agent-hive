@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { runV2PluginSetup, type V2Harness } from "../__tests__/v2-harness.js";
+import { runV2PluginSetup, agentsDirOf, type V2Harness } from "../__tests__/v2-harness.js";
 
 const TEST_ROOT_BASE = "/tmp/hive-agent-mode-test";
 
@@ -14,7 +14,7 @@ const TEST_ROOT_BASE = "/tmp/hive-agent-mode-test";
  * model/temperature from the frontmatter.
  */
 function agentEntry(harness: V2Harness, id: string): Record<string, unknown> | undefined {
-  const file = path.join(harness.homeDir, ".config", "opencode", "agents", `${id}.md`);
+  const file = path.join(agentsDirOf(harness), `${id}.md`);
   if (!fs.existsSync(file)) return undefined;
   const raw = fs.readFileSync(file, "utf-8");
   const frontmatter = raw.split("---")[1] ?? "";
@@ -59,16 +59,10 @@ describe("agentMode gating (V2 bootstrap)", () => {
   });
 
   it("registers hive, scout, forager, and hygienic in unified mode", async () => {
-    const configPath = path.join(testRoot, ".config", "opencode", "agent_hive.json");
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
-        agentMode: "unified",
-      }),
-    );
-
-    const harness = await runV2PluginSetup({ directory: testRoot });
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: { agentMode: "unified" },
+    });
 
     expect(agentEntry(harness, "zetta")).toBeDefined();
     expect(agentEntry(harness, "architect-planner")).toBeUndefined();
@@ -80,16 +74,10 @@ describe("agentMode gating (V2 bootstrap)", () => {
   });
 
   it("registers dedicated agents in dedicated mode", async () => {
-    const configPath = path.join(testRoot, ".config", "opencode", "agent_hive.json");
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
-        agentMode: "dedicated",
-      }),
-    );
-
-    const harness = await runV2PluginSetup({ directory: testRoot });
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: { agentMode: "dedicated" },
+    });
 
     expect(agentEntry(harness, "zetta")).toBeDefined();
     expect(agentEntry(harness, "scout-researcher")).toBeDefined();
@@ -101,11 +89,9 @@ describe("agentMode gating (V2 bootstrap)", () => {
   });
 
   it("injects custom-subagent appendix into dedicated-mode primary prompts and registers custom agents", async () => {
-    const configPath = path.join(testRoot, ".config", "opencode", "agent_hive.json");
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: {
         agentMode: "dedicated",
         customAgents: {
           "forager-ui": {
@@ -119,10 +105,8 @@ describe("agentMode gating (V2 bootstrap)", () => {
             autoLoadSkills: [],
           },
         },
-      }),
-    );
-
-    const harness = await runV2PluginSetup({ directory: testRoot });
+      },
+    });
 
     expect(agentEntry(harness, "forager-ui")).toBeDefined();
     expect(agentEntry(harness, "reviewer-security")).toBeDefined();
@@ -134,16 +118,10 @@ describe("agentMode gating (V2 bootstrap)", () => {
   });
 
   it("demotes built-in build/plan to subagents and registers zetta as primary default", async () => {
-    const configPath = path.join(testRoot, ".config", "opencode", "agent_hive.json");
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
-        agentMode: "unified",
-      }),
-    );
-
-    const harness = await runV2PluginSetup({ directory: testRoot });
+    const harness = await runV2PluginSetup({
+      directory: testRoot,
+      config: { agentMode: "unified" },
+    });
 
     // V1 parity: `build` and `plan` are demoted so zetta is the only
     // user-facing primary agent. They are updated in the agent catalog, not
