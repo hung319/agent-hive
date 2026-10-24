@@ -35,13 +35,19 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: Probe codegraph (before tests)
+      # Bisect: which group turns the suite red on the runner?
+      - name: G1 utils+services+tools
         working-directory: packages/opencode-hive
-        run: |
-          bun -e 'import("./src/utils/codegraph-installer.ts").then(m => console.log("resolve:", JSON.stringify(m.resolveCodegraphMcpCommand())))' || echo "import failed"
-          ls ../../node_modules/@colbymchenry/codegraph 2>&1 | head -3
-          command -v node; echo "node rc=$?"
+        run: bun test ./src/utils ./src/services ./src/tools ./src/mcp ./src/templates
 
-      - name: Test opencode-hive
+      - name: G2 hooks+skills+harness
         working-directory: packages/opencode-hive
-        run: bun test
+        run: bun test ./src/hooks ./src/skills ./src/__tests__
+
+      - name: G3 e2e
+        working-directory: packages/opencode-hive
+        run: bun test ./src/e2e
+
+      - name: G4 agents
+        working-directory: packages/opencode-hive
+        run: bun test ./src/agents
