@@ -12,6 +12,42 @@ import { shouldSkipAutoInstall } from './skip-install.js';
 
 const asyncExec = promisify(exec);
 
+/** Node/npm runtimes to probe when choosing the installer (first match wins). */
+const NODE_RUNTIME_NAMES = ['node', 'bun'];
+
+/** Whether a runtime/package-manager command is available to spawn. */
+function isExecutableOnPath(name: string, envPath: string = process.env.PATH ?? ''): boolean {
+  const dirs = envPath.split(path.delimiter).filter(Boolean);
+  return dirs.some((dir) => {
+    try {
+      fs.accessSync(path.join(dir, name), fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * Pick the package manager used for auto-install.
+ *
+ * `bun` is preferred but not required: `bun pm bin -g` and `bun test` do not
+ * put `bun` on PATH (see the CI workflow, which only installs Bun), while npm
+ * ships with Node. Returning null means no installer is available and the
+ * tools must degrade gracefully instead of logging a hard failure.
+ */
+export function resolveInstaller(
+  envPath: string = process.env.PATH ?? '',
+): { command: 'npm' | 'bun add'; label: 'npm' | 'bun' } | null {
+  if (NODE_RUNTIME_NAMES.some((runtime) => isExecutableOnPath(runtime, envPath)) && isExecutableOnPath('npm', envPath)) {
+    return { command: 'npm', label: 'npm' };
+  }
+  if (isExecutableOnPath('bun', envPath)) {
+    return { command: 'bun add', label: 'bun' };
+  }
+  return null;
+}
+
 const HIVE_DIR = path.join(os.homedir(), '.config', 'opencode', 'hive');
 const PACKAGES_DIR = path.join(HIVE_DIR, 'packages');
 const NODE_MODULES_DIR = path.join(PACKAGES_DIR, 'node_modules');
@@ -22,17 +58,44 @@ interface ToolEntry {
   version?: string;
   category: 'agent' | 'cli';
   binaries?: string[];
+  /**
+   * Skip this tool entirely. Kept for dependencies that are known to be
+   * unusable at the source (not just slow or missing), so plugin load never
+   * spends time on an install that cannot succeed.
+   */
+  disabledReason?: string;
 }
 
 const TOOLS: ToolEntry[] = [
   { name: '@sparkleideas/agent-booster', version: '0.2.34', category: 'agent' },
-  { name: '@sparkleideas/memory', category: 'agent' },
+  // No published release of @sparkleideas/memory provides the facade API Hive
+  // needs (`add`/`search`); the three.js chain also wants `@sparkleideas/agentdb@alpha`,
+  // whose tarballs ship without `dist/` (require fails). Installing it therefore
+  // can never enable vector search, so it is disabled: hive_vector_* stays on
+  // the documented sharded text-search fallback.
+  {
+    name: '@sparkleideas/memory',
+    category: 'agent',
+    disabledReason: 'no usable release on npm (missing dist/ + missing agentdb@alpha); vector memory runs on text-search fallback',
+  },
   { name: 'bun-pty', category: 'agent' },
-  // auto-cr-cmd ships its executable as `check`; `auto-cr-cmd` is kept as an
+  // auto-cr ships its executable as `check`; `auto-cr-cmd` is kept as an
   // alias so both names resolve after install.
   { name: 'auto-cr-cmd', category: 'cli', binaries: ['check', 'auto-cr-cmd'] },
   { name: 'btca', category: 'cli', binaries: ['btca'] },
 ];
+
+/** Tools Hive considers for auto-install (disabled ones are excluded). */
+function installableTools(): ToolEntry[] {
+  return TOOLS.filter((tool) => !tool.disabledReason);
+}
+
+/** Dependencies that are intentionally not installed, with the reason. */
+export function disabledToolReasons(): Record<string, string> {
+  return Object.fromEntries(
+    TOOLS.filter((tool) => tool.disabledReason).map((tool) => [tool.name, tool.disabledReason!]),
+  );
+}
 
 export function getHiveNodeModulesPath(): string {
   return NODE_MODULES_DIR;
@@ -141,22 +204,28 @@ export async function ensureToolsInstalled(): Promise<{ installed: string[]; fai
   const installed: string[] = [];
   const failed: string[] = [];
 
-  const toInstall = TOOLS.filter(t => !isToolAvailable(t.name));
+  const toInstall = installableTools().filter(t => !isToolAvailable(t.name));
   if (toInstall.length === 0) {
     return { installed: [], failed: [] };
   }
 
-  console.log(`[hive:installer] Auto-installing ${toInstall.length} tool(s): ${toInstall.map(t => t.name).join(', ')}`);
+  const installer = resolveInstaller();
+  if (!installer) {
+    console.warn('[hive:installer] No npm or bun on PATH; skipping tool auto-install (tools degrade gracefully)');
+    return { installed: [], failed: toInstall.map(t => t.name) };
+  }
+
+  console.log(`[hive:installer] Auto-installing ${toInstall.length} tool(s) via ${installer.label}: ${toInstall.map(t => t.name).join(', ')}`);
 
   fs.mkdirSync(PACKAGES_DIR, { recursive: true });
   fs.mkdirSync(BIN_DIR, { recursive: true });
 
   const packageNames = toInstall.map(t => t.version ? `${t.name}@${t.version}` : t.name);
   try {
-    await asyncExec(
-      `npm install --prefix "${PACKAGES_DIR}" --no-package-lock --no-save ${packageNames.join(' ')}`,
-      { timeout: 120000 },
-    );
+    const installCommand = installer.command === 'npm'
+      ? `npm install --prefix "${PACKAGES_DIR}" --no-package-lock --no-save ${packageNames.join(' ')}`
+      : `bun add --cwd "${PACKAGES_DIR}" --no-save ${packageNames.join(' ')}`;
+    await asyncExec(installCommand, { timeout: 120000 });
 
     for (const tool of toInstall) {
       if (tool.category === 'cli' && tool.binaries) {
@@ -185,6 +254,30 @@ export async function ensureToolsInstalled(): Promise<{ installed: string[]; fai
     installed.push(...names);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // A package the registry cannot satisfy (e.g. a transitive `@alpha`
+    // dependency that was never published) must not block the rest of the
+    // batch on every start: retry one by one and report what fails.
+    if (toInstall.length > 1) {
+      for (const tool of toInstall) {
+        const spec = tool.version ? `${tool.name}@${tool.version}` : tool.name;
+        try {
+          const singleCommand = installer.command === 'npm'
+            ? `npm install --prefix "${PACKAGES_DIR}" --no-package-lock --no-save ${spec}`
+            : `bun add --cwd "${PACKAGES_DIR}" --no-save ${spec}`;
+          await asyncExec(singleCommand, { timeout: 120000 });
+          installed.push(tool.name);
+        } catch {
+          failed.push(tool.name);
+        }
+      }
+      if (installed.length > 0) {
+        console.log(`[hive:installer] Installed individually via ${installer.label}: ${installed.join(', ')}`);
+      }
+      if (failed.length > 0) {
+        console.warn(`[hive:installer] Failed individually: ${failed.join(', ')} (tools fall back to graceful degradation)`);
+      }
+      return { installed, failed };
+    }
     console.warn(`[hive:installer] Install failed: ${message}`);
     console.warn('[hive:installer] Tools will fall back to graceful degradation');
     failed.push(...packageNames);

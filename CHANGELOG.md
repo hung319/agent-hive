@@ -14,7 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix: `hive_booster_status` báo đúng năng lực (`editing`, `capabilities { apply, lazyApply }`, `notes`) thay vì luôn `available: true`; `hive_lazy_edit` ghép marker bằng code của Hive vì package không có `lazyApply`
 - Fix: đường dẫn gói booster tính lại theo `HOME`/`XDG_CONFIG_HOME` của session, không cache từ lúc nạp module
 - Fix: frontmatter agent không còn dòng permission trùng do alias v1 (`edit` ×2, `subagent` ×2)
-- Tests: **642 pass / 0 fail** (opencode-hive), **150 pass / 0 fail** (hive-core), `tsc --noEmit` sạch, build dist 1.13 MB; verify trên OpenCode 2.1.4 thật với config/HOME cô lập (project mới không sinh `.opencode/agents`, `hive_code_edit` → `Applied via agent-booster (fuzzy_replace, confidence 0.77)`)
+- Fix: CI/Release đỏ ở bước `Test opencode-hive` — job không có Node/npm nên auto-install shell ra `npm: not found`; workflow giờ setup Node 20 trước khi test (workflow Release cấu hình `registry-url` sẵn và bỏ lần `npm install -g npm@11` lặp trong bước publish)
+- Fix: `tool-installer` chọn package manager lúc chạy — `npm` khi có node/npm trên PATH, không thì `bun add`, không có gì thì cảnh báo và degrade thay vì log lỗi mỗi lần nạp plugin; install hàng loạt lỗi sẽ thử lại từng gói và báo gói nào hỏng
+- Fix: ngừng auto-install `@sparkleideas/memory` (không bản nào trên npm có API facade Hive cần, `agentdb@alpha` publish thiếu `dist/`); `hive_vector_*` chạy trên fallback text-search phân mảnh và `hive_vector_status` nói rõ fallback là chủ ý
+- Tests: **647 pass / 0 fail** (opencode-hive), **150 pass / 0 fail** (hive-core), `tsc --noEmit` sạch, build dist 1.13 MB; verify trên OpenCode 2.1.4 thật với config/HOME cô lập (project mới không sinh `.opencode/agents`, `hive_code_edit` → `Applied via agent-booster (fuzzy_replace, confidence 0.77)`); mô phỏng CI với HOME rỗng: `[hive:installer] Auto-installing 1 tool(s) via npm: bun-pty` → `installed: ["bun-pty"]`
 
 ## [2.0.2] - 2026-10-24
 - Fix: khôi phục hành vi v1 cho agent — `build` và `plan` được hạ về `mode: "subagent"` qua `agentEditor.update`, để `zetta` là agent primary duy nhất người dùng thấy; các agent hệ thống ẩn (`compaction`, `title`, `summary`) vẫn giữ `primary` (hạ chúng làm `opencode run` lỗi `AgentNotFoundError`)

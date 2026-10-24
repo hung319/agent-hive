@@ -158,8 +158,8 @@ export const hiveVectorStatusTool: ToolDefinition = tool("hive_vector_status", {
 
     if (!status.available) {
       info.tips = [
-        'Install @sparkleideas/memory for vector search',
-        'npm install @sparkleideas/memory',
+        'Text search fallback is intentional: no @sparkleideas/memory release on npm provides the vector API Hive needs.',
+        'Vector search returns automatically if a working @sparkleideas/memory becomes installable.',
       ];
     }
 
