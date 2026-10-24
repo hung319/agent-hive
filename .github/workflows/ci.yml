@@ -35,14 +35,18 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: Probe
+      - name: P1 echo
         working-directory: packages/opencode-hive
-        run: |
-          echo "pwd=$(pwd)"
-          echo "bun=$(command -v bun 2>&1)"
-          bun --version
-          echo "bun --version rc=$?"
-          ls -d node_modules 2>&1
-          echo "ls rc=$?"
-          ls -d ../../node_modules/@opencode 2>&1
-          echo "ls2 rc=$?"
+        run: echo p1
+
+      - name: P2 pwd
+        working-directory: packages/opencode-hive
+        run: pwd
+
+      - name: P3 bun version
+        working-directory: packages/opencode-hive
+        run: bun --version
+
+      - name: P4 unit tests
+        working-directory: packages/opencode-hive
+        run: bun test ./src/utils
