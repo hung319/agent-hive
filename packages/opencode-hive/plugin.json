@@ -1,6 +1,6 @@
 {
   "name": "@hung319/opencode-hive",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Context-Driven Development for AI coding assistants",
   "dataPath": ".hive",
   "commands": [

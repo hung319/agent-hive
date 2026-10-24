@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-10-24
+- Fix: khôi phục hành vi v1 cho agent — `build` và `plan` được hạ về `mode: "subagent"` qua `agentEditor.update`, để `zetta` là agent primary duy nhất người dùng thấy; các agent hệ thống ẩn (`compaction`, `title`, `summary`) vẫn giữ `primary` (hạ chúng làm `opencode run` lỗi `AgentNotFoundError`)
+- Fix: ngừng ghi `temperature` vào frontmatter agent `.md` — OpenCode 2.1 không còn hỗ trợ field này và log `ignored unsupported agent fields: ["temperature"]` cho mọi agent mỗi lần khởi động; `temperature` trong `agent_hive.json` vẫn được nhận để tương thích
+- Fix: `hive_tasks_sync` cảnh báo khi plan có `## Tasks` nhưng không có header dạng `### 1. Tên task` — trước đây trả `0 created` im lặng (dễ mất task đã có)
+- Fix: cho phép `hive_worktree_commit` commit lại task đã `done` khi branch chưa có commit nào (lần trước kết thúc với "No changes to commit"), thay vì chặn bằng `invalid_task_state`
+- Fix: `verificationNote` không còn báo thiếu evidence khi summary có dòng `Verification:` / `verify`
+- Tests: **626 pass / 0 fail** (opencode-hive), **150 pass / 0 fail** (hive-core), `tsc --noEmit` sạch, build dist 1.12 MB
+- Verify: chạy OpenCode 2.1.3/2.1.4 thật — agent catalog `build|subagent`, `plan|subagent`, `zetta` là default; `opencode run` trả lời với `> zetta · ...`; agent md không còn `temperature` và không còn warning
+
 ## [2.0.1] - 2026-10-23
 - Fix: npm install báo `PluginModule.LoadError: Plugin entrypoint not found` khi cấu hình `plugins: ["@hung319/opencode-hive"]` — `exports["."]` trỏ `./index.js`, nhưng shim này không nằm trong `files` nên không được publish, còn build thật nằm ở `dist/index.js`; đổi `exports["."]` sang `./dist/index.js` kèm condition `types`
 - Fix: thêm `"./package.json"` vào `exports` để công cụ đọc metadata không bị chặn bởi exports map
