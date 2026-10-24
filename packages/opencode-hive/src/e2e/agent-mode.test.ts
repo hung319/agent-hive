@@ -127,7 +127,7 @@ describe("agentMode gating (V2 bootstrap)", () => {
     // user-facing primary agent. They are updated in the agent catalog, not
     // written as definition files.
     const agentFile = (id: string) =>
-      fs.existsSync(path.join(harness.homeDir, ".config", "opencode", "agents", `${id}.md`));
+      fs.existsSync(path.join(agentsDirOf(harness), `${id}.md`));
     expect(agentFile("build")).toBe(false);
     expect(agentFile("plan")).toBe(false);
 

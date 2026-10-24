@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { ConfigService } from 'hive-core';
 import * as fs from 'fs';
 import * as path from 'path';
-import { runV2PluginSetup, type V2Harness } from '../__tests__/v2-harness';
+import { runV2PluginSetup, agentsDirOf, type V2Harness } from '../__tests__/v2-harness';
 
 /**
  * V2 note: agents are contributed as generated `.opencode/agents/*.md`
@@ -14,9 +14,10 @@ import { runV2PluginSetup, type V2Harness } from '../__tests__/v2-harness';
 
 type MdFile = string | undefined;
 
-function readAgentMd(dir: string, id: string): MdFile {
-  // Agent files are written to the global config dir; `dir` is the isolated HOME.
-  const file = path.join(dir, '.config', 'opencode', 'agents', `${id}.md`);
+function readAgentMd(harness: V2Harness, id: string): MdFile {
+  // Agent files are global; resolve the dir like setup does so an ambient
+  // XDG_CONFIG_HOME cannot move them out from under the assertion.
+  const file = path.join(agentsDirOf(harness), `${id}.md`);
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : undefined;
 }
 
@@ -87,26 +88,26 @@ describe('Agent permissions (V2 bootstrap)', () => {
     const h = await setupWith({ agentMode: 'unified', agents: { zetta: {} } });
 
     // Agents are generated into `<config>/agents` in V2
-    expect(readAgentMd(h.homeDir, 'zetta')).toBeTruthy();
-    expect(readAgentMd(h.homeDir, 'swarm-orchestrator')).toBeUndefined();
-    expect(readAgentMd(h.homeDir, 'architect-planner')).toBeUndefined();
-    expect(readAgentMd(h.homeDir, 'scout-researcher')).toBeTruthy();
-    expect(readAgentMd(h.homeDir, 'forager-worker')).toBeTruthy();
-    expect(readAgentMd(h.homeDir, 'hygienic-reviewer')).toBeTruthy();
+    expect(readAgentMd(h, 'zetta')).toBeTruthy();
+    expect(readAgentMd(h, 'swarm-orchestrator')).toBeUndefined();
+    expect(readAgentMd(h, 'architect-planner')).toBeUndefined();
+    expect(readAgentMd(h, 'scout-researcher')).toBeTruthy();
+    expect(readAgentMd(h, 'forager-worker')).toBeTruthy();
+    expect(readAgentMd(h, 'hygienic-reviewer')).toBeTruthy();
 
     // zetta is the primary/default agent
-    expect(readAgentMd(h.homeDir, 'zetta')).toContain('mode: primary');
+    expect(readAgentMd(h, 'zetta')).toContain('mode: primary');
     expect(h.agentDefaults).toContain('zetta');
 
     // zetta keeps permission rules in its generated definition
-    expect(permissionRules(readAgentMd(h.homeDir, 'zetta')).length).toBeGreaterThan(0);
+    expect(permissionRules(readAgentMd(h, 'zetta')).length).toBeGreaterThan(0);
   });
 
   it('registers dedicated agents in dedicated mode', async () => {
     const h = await setupWith({ agentMode: 'dedicated', agents: { zetta: {} } });
 
     for (const id of ['zetta', 'scout-researcher', 'forager-worker', 'hygienic-reviewer', 'codebase-locator', 'codebase-analyzer']) {
-      expect(readAgentMd(h.homeDir, id)).toBeTruthy();
+      expect(readAgentMd(h, id)).toBeTruthy();
     }
     expect(h.agentDefaults).toContain('zetta');
   });
@@ -116,10 +117,10 @@ describe('Agent permissions (V2 bootstrap)', () => {
 
     for (const id of ['scout-researcher', 'forager-worker', 'hygienic-reviewer']) {
       // V1 `task`/`delegate` → V2 `subagent` action deny
-      expect(hasDeny(readAgentMd(h.homeDir, id), 'subagent')).toBe(true);
+      expect(hasDeny(readAgentMd(h, id), 'subagent')).toBe(true);
     }
     // zetta must be able to launch subagents
-    expect(hasDeny(readAgentMd(h.homeDir, 'zetta'), 'subagent')).toBe(false);
+    expect(hasDeny(readAgentMd(h, 'zetta'), 'subagent')).toBe(false);
   });
 
   it('inherits subagent safety restrictions for custom forager and hygienic families', async () => {
@@ -132,13 +133,13 @@ describe('Agent permissions (V2 bootstrap)', () => {
       },
     });
 
-    expect(readAgentMd(h.homeDir, 'forager-ui')).toBeTruthy();
-    expect(readAgentMd(h.homeDir, 'reviewer-security')).toBeTruthy();
+    expect(readAgentMd(h, 'forager-ui')).toBeTruthy();
+    expect(readAgentMd(h, 'reviewer-security')).toBeTruthy();
 
     // forager family: no subagent launches
-    expect(hasDeny(readAgentMd(h.homeDir, 'forager-ui'), 'subagent')).toBe(true);
+    expect(hasDeny(readAgentMd(h, 'forager-ui'), 'subagent')).toBe(true);
     // reviewer family: no edits
-    expect(hasDeny(readAgentMd(h.homeDir, 'reviewer-security'), 'edit')).toBe(true);
+    expect(hasDeny(readAgentMd(h, 'reviewer-security'), 'edit')).toBe(true);
 
     // The context hook applies the same gate to custom agents
     const foragerUi = applyToolGate(h, 'forager-ui');
@@ -243,7 +244,7 @@ describe('Per-agent tool filtering (V2 context hook)', () => {
     for (const agentMode of ['unified', 'dedicated']) {
       const h = await runV2PluginSetup({ config: { agentMode, agents: { zetta: {} } } });
       for (const name of coreAgents) {
-        expect(readAgentMd(h.homeDir, name)).toBeTruthy();
+        expect(readAgentMd(h, name)).toBeTruthy();
       }
       h.restoreHome();
       fs.rmSync(h.projectDir, { recursive: true, force: true });

@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { runV2PluginSetup, disposeHarness, type V2Harness } from '../__tests__/v2-harness';
+import { runV2PluginSetup, disposeHarness, agentsDirOf, type V2Harness } from '../__tests__/v2-harness';
 
 /**
  * Agent definitions are installed once per machine in the global config dir
@@ -37,7 +37,7 @@ describe('global agent installation (V2 bootstrap)', () => {
   test('writes definitions to the global config dir, not the project', async () => {
     harness = await runV2PluginSetup({ directory: path.join(testRoot, 'project') });
 
-    const globalDir = path.join(testRoot, '.config', 'opencode', 'agents');
+    const globalDir = agentsDirOf(harness);
     expect(fs.existsSync(path.join(globalDir, 'zetta.md'))).toBe(true);
     expect(fs.existsSync(path.join(globalDir, 'forager-worker.md'))).toBe(true);
     expect(fs.existsSync(path.join(harness.projectDir, '.opencode', 'agents'))).toBe(false);
@@ -45,7 +45,7 @@ describe('global agent installation (V2 bootstrap)', () => {
 
   test('reuses one global install across projects', async () => {
     harness = await runV2PluginSetup({ directory: path.join(testRoot, 'project-a') });
-    const globalZetta = path.join(testRoot, '.config', 'opencode', 'agents', 'zetta.md');
+    const globalZetta = path.join(agentsDirOf(harness), 'zetta.md');
     expect(fs.existsSync(globalZetta)).toBe(true);
 
     disposeHarness(harness);
@@ -69,7 +69,7 @@ describe('global agent installation (V2 bootstrap)', () => {
     expect(fs.existsSync(path.join(legacyDir, 'forager-worker.md'))).toBe(false);
     // User-authored agents in the same directory are preserved.
     expect(fs.existsSync(path.join(legacyDir, 'my-own-agent.md'))).toBe(true);
-    expect(fs.existsSync(path.join(testRoot, '.config', 'opencode', 'agents', 'zetta.md'))).toBe(true);
+    expect(fs.existsSync(path.join(agentsDirOf(harness), 'zetta.md'))).toBe(true);
   });
 
   test('prunes an emptied legacy agents directory', async () => {
@@ -89,7 +89,7 @@ describe('global agent installation (V2 bootstrap)', () => {
     harness = await runV2PluginSetup({ directory: path.join(testRoot, 'perm-project') });
 
     const zetta = fs.readFileSync(
-      path.join(testRoot, '.config', 'opencode', 'agents', 'zetta.md'),
+      path.join(agentsDirOf(harness), 'zetta.md'),
       'utf-8',
     );
     const rules = zetta
