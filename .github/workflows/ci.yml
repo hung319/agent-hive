@@ -57,7 +57,10 @@ jobs:
         run: bun test ./src/hooks ./src/skills ./src/__tests__
 
       - name: Probe git config
-        run: git config user.name; echo "git name rc=$?"; git config --global user.email; echo "git email rc=$?"
+        run: |
+          git config user.name; echo "git name rc=$?"
+          git config --global user.email; echo "git email rc=$?"
+          true
 
       - name: G3 e2e
         working-directory: packages/opencode-hive
