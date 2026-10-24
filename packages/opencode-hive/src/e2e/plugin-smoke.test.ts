@@ -733,7 +733,7 @@ Do it
 
     // Auto-loaded skills/custom subagents land in the generated agent definition body
     const agentMd = (name: string) =>
-      fs.readFileSync(path.join(harness.projectDir, ".opencode", "agents", `${name}.md`), "utf-8");
+      fs.readFileSync(path.join(harness.homeDir, ".config", "opencode", "agents", `${name}.md`), "utf-8");
     const agentBody = (name: string) => agentMd(name).split("---").slice(2).join("---");
 
     // Skills are referenced via hive_skill("...") - on-demand loading
@@ -1241,8 +1241,8 @@ Do it
     );
     expect(parallelExplorationSkill).toBeDefined();
 
-    // V2: agent prompts are generated into .opencode/agents/*.md bodies
-    const agentsDir = path.join(harness.projectDir, ".opencode", "agents");
+    // V2: agent prompts are generated into the global `<config>/agents/*.md` bodies
+    const agentsDir = path.join(harness.homeDir, ".config", "opencode", "agents");
     const agentBody = (id: string) =>
       fs.readFileSync(path.join(agentsDir, `${id}.md`), "utf-8").split("---").slice(2).join("---");
 

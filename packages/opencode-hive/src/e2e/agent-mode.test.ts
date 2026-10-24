@@ -7,12 +7,13 @@ const TEST_ROOT_BASE = "/tmp/hive-agent-mode-test";
 
 /**
  * V2 port: the plugin no longer mutates an `opencodeConfig.agent` map through
- * a `hooks.config` hook — it writes `.opencode/agents/<id>.md` definitions.
- * These helpers rebuild the V1 view: presence from the md file, prompt from
- * the md body, mode/variant/model/temperature from the frontmatter.
+ * a `hooks.config` hook — it writes `<config>/agents/<id>.md` definitions
+ * (global, inside the harness's isolated HOME). These helpers rebuild the V1
+ * view: presence from the md file, prompt from the md body, mode/variant/
+ * model/temperature from the frontmatter.
  */
 function agentEntry(harness: V2Harness, id: string): Record<string, unknown> | undefined {
-  const file = path.join(harness.projectDir, ".opencode", "agents", `${id}.md`);
+  const file = path.join(harness.homeDir, ".config", "opencode", "agents", `${id}.md`);
   if (!fs.existsSync(file)) return undefined;
   const raw = fs.readFileSync(file, "utf-8");
   const frontmatter = raw.split("---")[1] ?? "";
@@ -147,7 +148,7 @@ describe("agentMode gating (V2 bootstrap)", () => {
     // user-facing primary agent. They are updated in the agent catalog, not
     // written as definition files.
     const agentFile = (id: string) =>
-      fs.existsSync(path.join(harness.projectDir, ".opencode", "agents", `${id}.md`));
+      fs.existsSync(path.join(harness.homeDir, ".config", "opencode", "agents", `${id}.md`));
     expect(agentFile("build")).toBe(false);
     expect(agentFile("plan")).toBe(false);
 

@@ -31,11 +31,17 @@ export interface AgentBoosterResult {
 // Lazy-loaded booster instance
 let boosterInstance: any = null;
 let boosterInitPromise: Promise<void> | null = null;
-// Raw module kept separate from boosterInstance, which may be .default-unwrapped
+// Raw module kept separate from boosterInstance, which may be .default-unwrapped.
+// `apply` is resolved from here first: the module carries the named `apply`
+// export and the `AgentBooster` class, while a class default export is a
+// constructor and must never be invoked directly.
 let boosterModule: any = null;
 let loadedBoosterPath: string | null = null;
 
 const BOOSTER_PACKAGE = '@sparkleideas/agent-booster';
+
+/** Fuzzy booster output below this confidence is not trusted for file writes. */
+const MIN_CONFIDENCE = 0.6;
 
 /** A directory counts as a package if it carries an entry point require() can load. */
 function isPackageDir(pkgDir: string): boolean {
@@ -50,9 +56,26 @@ function isPackageDir(pkgDir: string): boolean {
 
 /**
  * Resolve booster package path. Precedence: hive packages -> global npm root -> cwd -> require.resolve.
+ *
+ * The config root is read per call (not cached) because `tool-installer` computes
+ * its dirs from HOME at module load: a daemon started with one HOME must not
+ * keep serving that HOME's packages to a session started with another.
  */
+function boosterPackageRoots(): string[] {
+  const roots = new Set<string>([getHiveNodeModulesPath()]);
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (home) {
+    roots.add(path.join(home, '.config', 'opencode', 'hive', 'packages', 'node_modules'));
+  }
+  const xdg = process.env.XDG_CONFIG_HOME;
+  if (xdg) {
+    roots.add(path.join(xdg, 'opencode', 'hive', 'packages', 'node_modules'));
+  }
+  return [...roots];
+}
+
 function resolveBoosterPackage(): string | null {
-  const candidates = [getHiveNodeModulesPath(), getGlobalNpmRoot(), path.join(process.cwd(), 'node_modules')];
+  const candidates = [...boosterPackageRoots(), getGlobalNpmRoot(), path.join(process.cwd(), 'node_modules')];
   for (const base of candidates) {
     if (!base) continue;
     const pkgDir = path.join(base, BOOSTER_PACKAGE);
@@ -124,9 +147,190 @@ async function initBooster(): Promise<void> {
 }
 
 /**
- * Apply edit using agent-booster
+ * Resolve the object that exposes `apply({ code, edit, language })`.
+ *
+ * Every published @sparkleideas/agent-booster version exports a class
+ * (`AgentBooster`) and/or a named `apply` function; none ship the
+ * `fastApply`/`lazyApply` helpers older Hive builds expected.
+ *
+ * The class must be instantiated with `new`: its `apply` is a prototype
+ * method, so invoking the class as a plain function throws ("Cannot call a
+ * class constructor AgentBooster without |new|") and silently disables edits.
+ * A raw module object also inherits `Function.prototype.apply`, so module
+ * exports are checked for an own `apply` only.
  */
-async function applyWithBooster(edit: AgentBoosterEdit): Promise<AgentBoosterResult> {
+export function resolveBoosterApi(
+  moduleExports: any,
+): { apply: (request: any) => Promise<any> } | null {
+  const mod = moduleExports ?? {};
+  const ownApply = Object.prototype.hasOwnProperty.call(mod, 'apply') ? mod.apply : undefined;
+  if (typeof ownApply === 'function') {
+    return { apply: (request) => ownApply.call(mod, request) };
+  }
+  const AgentBoosterClass =
+    typeof mod.AgentBooster === 'function'
+      ? mod.AgentBooster
+      : typeof mod.default === 'function' && mod.default.prototype && typeof mod.default.prototype.apply === 'function'
+        ? mod.default
+        : null;
+  if (AgentBoosterClass) {
+    try {
+      const instance = new AgentBoosterClass();
+      return { apply: (request) => instance.apply(request) };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Best-effort language hint for agent-booster's language parameter. */
+export function inferLanguage(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const map: Record<string, string> = {
+    '.ts': 'typescript',
+    '.tsx': 'typescript',
+    '.js': 'javascript',
+    '.jsx': 'javascript',
+    '.mjs': 'javascript',
+    '.cjs': 'javascript',
+    '.py': 'python',
+    '.rs': 'rust',
+    '.go': 'go',
+    '.java': 'java',
+    '.kt': 'kotlin',
+    '.c': 'c',
+    '.h': 'c',
+    '.cpp': 'cpp',
+    '.hpp': 'cpp',
+    '.cs': 'csharp',
+    '.rb': 'ruby',
+    '.php': 'php',
+    '.swift': 'swift',
+    '.sh': 'bash',
+    '.json': 'json',
+    '.yaml': 'yaml',
+    '.yml': 'yaml',
+    '.md': 'markdown',
+  };
+  return map[ext] ?? 'text';
+}
+
+/**
+ * Capture the current content of a symbol definition, used to seed `code`.
+ * The captured snippet includes the opening `{ ... }` body so an edit inside
+ * the symbol has real context for agent-booster's fuzzy matcher.
+ */
+function symbolSnippet(currentContent: string, symbol: string): string | null {
+  if (!symbol) return null;
+  const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const patterns = [
+    new RegExp(`^[ \\t]*(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?function\\s*\\*?\\s*${escaped}\\b`, 'm'),
+    new RegExp(`^[ \\t]*(?:export\\s+)?(?:default\\s+)?(?:abstract\\s+)?class\\s+${escaped}\\b`, 'm'),
+    new RegExp(`^[ \\t]*(?:export\\s+)?(?:const|let|var|type|interface|enum)\\s+${escaped}\\b`, 'm'),
+  ];
+  const lines = currentContent.split('\n');
+  for (const pattern of patterns) {
+    const match = pattern.exec(currentContent);
+    if (!match || match.index === undefined) continue;
+    const startLine = currentContent.slice(0, match.index).split('\n').length - 1;
+    // Take the declaration line, then extend until braces balance.
+    let depth = 0;
+    let seenBrace = false;
+    let endLine = startLine;
+    for (let i = startLine; i < Math.min(lines.length, startLine + 80); i++) {
+      const line = lines[i] ?? '';
+      for (const ch of line) {
+        if (ch === '{') {
+          depth += 1;
+          seenBrace = true;
+        } else if (ch === '}') {
+          depth -= 1;
+        }
+      }
+      endLine = i;
+      if (seenBrace && depth <= 0) break;
+      if (!seenBrace && i === startLine && !line.trimEnd().endsWith('{')) break;
+    }
+    return lines.slice(startLine, endLine + 1).join('\n');
+  }
+  return null;
+}
+
+/**
+ * Ask agent-booster for its opinion and return its full-file result.
+ * Returns `null` when the module has no usable `apply`, the span cannot be
+ * located, or the model is not confident enough.
+ */
+async function boosterCandidate(
+  currentContent: string,
+  edit: AgentBoosterEdit & { language?: string; symbol?: string },
+): Promise<{ code: string; strategy: string; confidence: number } | null> {
+  const api = resolveBoosterApi(boosterModule ?? boosterInstance);
+  if (!api) return null;
+
+  const spanStart = edit.oldContent ? currentContent.indexOf(edit.oldContent) : -1;
+  const snippet = symbolSnippet(currentContent, edit.symbol ?? '')
+    ?? (spanStart >= 0 ? edit.oldContent : null);
+  if (snippet === null) return null;
+
+  const currentSnippet = currentContent.includes(snippet) ? snippet : edit.oldContent;
+  if (!currentSnippet.includes(edit.oldContent)) return null;
+  const editedSnippet = currentSnippet.replace(edit.oldContent, edit.newContent);
+
+  const result = await api.apply({
+    code: currentSnippet,
+    edit: editedSnippet,
+    language: edit.language || inferLanguage(edit.path),
+  });
+  if (process.env.HIVE_BOOSTER_DEBUG) {
+    console.log('[agent-booster][debug]', JSON.stringify({
+      symbol: edit.symbol,
+      snippet: currentSnippet,
+      edited: editedSnippet,
+      result: { success: result?.success, strategy: result?.strategy, confidence: result?.confidence, hasCode: typeof result?.code, hasOutput: typeof result?.output },
+    }));
+  }
+  if (!result || result.success !== true) return null;
+
+  const confidence = typeof result.confidence === 'number' ? result.confidence : 0;
+  // Low-confidence fuzzy output is not trustworthy for a deterministic tool.
+  if (confidence > 0 && confidence < MIN_CONFIDENCE) return null;
+
+  const editedCode = typeof result.code === 'string'
+    ? result.code
+    : typeof result.output === 'string'
+      ? result.output
+      : editedSnippet;
+
+  // Splice the model's output over exactly the span it was given. Trailing
+  // newlines are normalised so the file's line structure is preserved.
+  const spanStartIndex = currentContent.indexOf(currentSnippet);
+  const normalized = editedCode.replace(/\n+$/, '');
+  const replacement = currentSnippet.endsWith('\n') ? normalized + '\n' : normalized;
+
+  return {
+    code:
+      currentContent.slice(0, spanStartIndex) +
+      replacement +
+      currentContent.slice(spanStartIndex + currentSnippet.length),
+    strategy: String(result.strategy ?? 'apply'),
+    confidence,
+  };
+}
+
+/**
+ * Apply edit using agent-booster.
+ *
+ * Agent Booster takes the code it should edit plus the intended result for a
+ * small span. Hive keeps the exact-replace contract: `code` is the line(s)
+ * holding `oldContent`, `edit` is the same span with `newContent` substituted.
+ * The result is written only when it contains `newContent`; otherwise the
+ * deterministic string replacement runs so behavior stays predictable.
+ */
+async function applyWithBooster(
+  edit: AgentBoosterEdit & { language?: string; symbol?: string },
+): Promise<AgentBoosterResult> {
   await initBooster();
   
   if (!boosterInstance) {
@@ -150,38 +354,45 @@ async function applyWithBooster(edit: AgentBoosterEdit): Promise<AgentBoosterRes
     
     // Read current content
     const currentContent = fs.readFileSync(edit.path, 'utf-8');
-    
-    // Use agent-booster's fast apply if available
-    if (typeof boosterInstance.fastApply === 'function') {
-      const result = await boosterInstance.fastApply({
-        path: edit.path,
-        old: edit.oldContent,
-        new: edit.newContent,
-      });
-      
+    if (!currentContent.includes(edit.oldContent)) {
       return {
-        success: result.success ?? true,
+        success: false,
         path: edit.path,
-        applied: result.applied ?? 'Applied via agent-booster',
+        error: 'oldContent not found in file',
+      };
+    }
+
+    // Use agent-booster's apply({ code, edit, language }) when available
+    let candidate: Awaited<ReturnType<typeof boosterCandidate>> = null;
+    try {
+      candidate = await boosterCandidate(currentContent, edit);
+    } catch (error) {
+      // A booster failure must never fail the edit; the deterministic path
+      // below still runs.
+      if (process.env.HIVE_BOOSTER_DEBUG) {
+        console.warn('[agent-booster] edit delegation failed:', error instanceof Error ? error.message : error);
+      }
+      candidate = null;
+    }
+    if (candidate && candidate.code.includes(edit.newContent)) {
+      fs.writeFileSync(edit.path, candidate.code, 'utf-8');
+      return {
+        success: true,
+        path: edit.path,
+        applied: `Applied via agent-booster (${candidate.strategy}, confidence ${
+          candidate.confidence > 0 ? candidate.confidence.toFixed(2) : 'n/a'
+        })`,
       };
     }
     
     // Fallback: simple string replacement
-    if (currentContent.includes(edit.oldContent)) {
-      const newContent = currentContent.replace(edit.oldContent, edit.newContent);
-      fs.writeFileSync(edit.path, newContent, 'utf-8');
-      
-      return {
-        success: true,
-        path: edit.path,
-        applied: 'Applied via fallback (string replace)',
-      };
-    }
+    const newContent = currentContent.replace(edit.oldContent, edit.newContent);
+    fs.writeFileSync(edit.path, newContent, 'utf-8');
     
     return {
-      success: false,
+      success: true,
       path: edit.path,
-      error: 'oldContent not found in file',
+      applied: 'Applied via fallback (string replace)',
     };
   } catch (error) {
     return {
@@ -196,7 +407,9 @@ async function applyWithBooster(edit: AgentBoosterEdit): Promise<AgentBoosterRes
 /**
  * Apply edit with fallback to native implementation
  */
-export async function applyCodeEdit(edit: AgentBoosterEdit): Promise<AgentBoosterResult> {
+export async function applyCodeEdit(
+  edit: AgentBoosterEdit & { language?: string; symbol?: string },
+): Promise<AgentBoosterResult> {
   // Try agent-booster first
   const boosterResult = await applyWithBooster(edit);
   
@@ -241,6 +454,63 @@ export async function applyCodeEdit(edit: AgentBoosterEdit): Promise<AgentBooste
   }
 }
 
+/** Marker line meaning "keep the file's lines here". */
+const LAZY_MARKER = /^\s*(?:\/\/|#|--|\/\*|\*)?\s*\.\.\.\s*existing\s+code\s*\.\.\.\s*(?:\*\/)?\s*$/i;
+
+/**
+ * Merge a marker snippet into the current file content.
+ *
+ * Each marker splits the snippet into blocks; block `i` is placed after the
+ * file's lines are kept for marker `i`. A snippet without markers returns
+ * `null` because it is not a lazy edit.
+ */
+export function mergeLazySnippet(currentContent: string, snippet: string): string | null {
+  const snippetLines = snippet.split('\n');
+  const hasMarker = snippetLines.some((line) => LAZY_MARKER.test(line));
+  if (!hasMarker) return null;
+
+  const blocks: string[][] = [[]];
+  for (const line of snippetLines) {
+    if (LAZY_MARKER.test(line)) {
+      blocks.push([]);
+      continue;
+    }
+    blocks[blocks.length - 1]!.push(line);
+  }
+
+  // Marker count = blocks.length - 1. Trim blocks that are empty because the
+  // snippet started or ended with a marker (nothing to insert there).
+  const leading = blocks[0]!.length === 0 ? 1 : 0;
+  const trailing = blocks.length > 1 && blocks[blocks.length - 1]!.length === 0 ? 1 : 0;
+  const inserts = blocks.slice(leading, blocks.length - trailing);
+
+  const fileLines = currentContent.split('\n');
+  const markerCount = blocks.length - 1;
+  const out: string[] = [];
+
+  if (markerCount === 1 && inserts.length === 1 && leading === 1 && trailing === 0) {
+    // Single `// ... existing code ...` at the top: keep the file, add the
+    // snippet at the end (most common "append" shape).
+    return currentContent + (currentContent.endsWith('\n') ? '' : '\n') + inserts[0]!.join('\n');
+  }
+
+  // Distribute inserts across the file: keep existing lines between markers.
+  const segments = inserts.length + 1;
+  const chunkSize = Math.max(1, Math.ceil(fileLines.length / segments));
+  let fileIndex = 0;
+  if (leading === 1 && inserts[0]) {
+    out.push(...inserts[0]);
+    inserts.shift();
+  }
+  for (const block of inserts) {
+    out.push(...fileLines.slice(fileIndex, fileIndex + chunkSize));
+    fileIndex += chunkSize;
+    out.push(...block);
+  }
+  out.push(...fileLines.slice(fileIndex));
+  return out.join('\n');
+}
+
 /**
  * Check if agent-booster is available
  */
@@ -249,32 +519,53 @@ export async function isBoosterAvailable(): Promise<boolean> {
   return boosterInstance !== null;
 }
 
+/** Whether hive_code_edit can delegate an edit to the loaded module. */
+export async function isBoosterEditingAvailable(): Promise<boolean> {
+  await initBooster();
+  return resolveBoosterApi(boosterModule ?? boosterInstance) !== null;
+}
+
 /**
  * Get booster status
  */
 export async function getBoosterStatus(): Promise<{
   available: boolean;
   version?: string;
+  editing?: boolean;
+  capabilities?: { apply?: boolean; lazyApply?: boolean };
+  notes?: string[];
 }> {
   const available = await isBoosterAvailable();
   
   if (!available) {
     return { available: false };
   }
+
+  const capabilities = {
+    apply: resolveBoosterApi(boosterModule ?? boosterInstance) !== null,
+    lazyApply: typeof boosterModule?.lazyApply === 'function' || typeof boosterInstance?.lazyApply === 'function',
+  };
+  const notes: string[] = [];
+  if (!capabilities.apply) {
+    notes.push('Module loaded but exposes no apply({code, edit, language}); hive_code_edit uses exact string replacement.');
+  }
+  if (!capabilities.lazyApply) {
+    notes.push('No lazyApply entry point; hive_lazy_edit merges markers with its built-in implementation.');
+  }
   
   // Version from loaded module / package.json — a bare-name import fails for hive/global installs
   try {
     const raw = boosterModule ?? boosterInstance;
     if (typeof raw?.version === 'string' && raw.version.length > 0) {
-      return { available: true, version: raw.version };
+      return { available: true, version: raw.version, editing: capabilities.apply, capabilities, notes };
     }
     const pkgJsonPath = loadedBoosterPath
       ? path.join(loadedBoosterPath, 'package.json')
       : require.resolve(`${BOOSTER_PACKAGE}/package.json`);
     const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
-    return { available: true, version: pkg.version || 'unknown' };
+    return { available: true, version: pkg.version || 'unknown', editing: capabilities.apply, capabilities, notes };
   } catch {
-    return { available: true };
+    return { available: true, editing: capabilities.apply, capabilities, notes };
   }
 }
 
@@ -332,15 +623,20 @@ export const hiveCodeEditTool: ToolDefinition = tool("hive_code_edit", {
 });
 
 /**
- * Lazy edit marker tool - uses agent-booster's special marker syntax
- * Allows partial code snippets with // ... existing code ... placeholders
+ * Lazy edit marker tool - partial snippets with `// ... existing code ...`
+ * placeholders merged into the file.
+ *
+ * No published @sparkleideas/agent-booster release ships a `lazyApply` entry
+ * point, so the merge is implemented by Hive: every marker position keeps the
+ * file's existing lines and the user-supplied lines are spliced in between.
  */
 export const hiveLazyEditTool: ToolDefinition = tool("hive_lazy_edit", {
-  description: `Fast code editing with lazy markers using agent-booster.
+  description: `Fast code editing with lazy markers.
 
 **Lazy Markers:**
 Use \`// ... existing code ...\` to indicate unchanged sections.
-Agent-booster intelligently merges your partial code into the full file.
+Lines outside markers replace the whole file; marker lines keep the current
+file content around the inserted snippet.
 
 **Example:**
 \`\`\`
@@ -349,7 +645,8 @@ const newFunction = () => { ... };
 // ... existing code ...
 \`\`\`
 
-**Note:** Requires @sparkleideas/agent-booster to be installed and enabled.`,
+**Note:** Booster availability only affects reporting; the merge itself is
+deterministic and needs no optional dependency.`,
 
   args: {
     path: tool.schema.string().describe('File path'),
@@ -361,36 +658,43 @@ const newFunction = () => { ... };
       ? filePath
       : path.join(process.cwd(), filePath);
 
-    // Check if agent-booster is available
-    const available = await isBoosterAvailable();
-    
-    if (!available) {
+    if (!fs.existsSync(resolvedPath)) {
       return JSON.stringify({
         success: false,
-        error: 'agent-booster not available',
-        hint: 'Install @sparkleideas/agent-booster or use hive_code_edit for native editing',
+        error: `File not found: ${resolvedPath}`,
       }, null, 2);
     }
 
     try {
-      // Use agent-booster's lazy apply
-      if (typeof boosterInstance.lazyApply === 'function') {
-        const result = await boosterInstance.lazyApply({
-          path: resolvedPath,
-          snippet,
-        });
+      const currentContent = fs.readFileSync(resolvedPath, 'utf-8');
 
+      // Newer booster builds may expose lazyApply; prefer it when present.
+      const lazyApply = boosterModule?.lazyApply ?? boosterInstance?.lazyApply;
+      if (typeof lazyApply === 'function') {
+        const result = await lazyApply.call(boosterModule ?? boosterInstance, { path: resolvedPath, snippet });
         return JSON.stringify({
           success: result.success ?? true,
           path: resolvedPath,
+          applied: 'agent-booster lazyApply',
           message: result.message || 'Lazy edit applied',
         }, null, 2);
       }
 
+      const merged = mergeLazySnippet(currentContent, snippet);
+      if (merged === null) {
+        return JSON.stringify({
+          success: false,
+          error: 'snippet contains no lazy markers and would replace the whole file',
+          hint: 'Use hive_code_edit for exact replacements, or add // ... existing code ... markers.',
+        }, null, 2);
+      }
+
+      fs.writeFileSync(resolvedPath, merged, 'utf-8');
       return JSON.stringify({
-        success: false,
-        error: 'Lazy apply not supported',
-        hint: 'Update @sparkleideas/agent-booster for lazy edit support',
+        success: true,
+        path: resolvedPath,
+        applied: 'Merged via lazy markers (built-in)',
+        message: 'Lazy edit applied',
       }, null, 2);
     } catch (error) {
       return JSON.stringify({
@@ -405,10 +709,11 @@ const newFunction = () => { ... };
  * Tool to check agent-booster status
  */
 export const hiveBoosterStatusTool: ToolDefinition = tool("hive_booster_status", {
-  description: `Check agent-booster availability and status.
+  description: `Check agent-booster availability, capability and status.
 
 **Returns:**
-- available: Whether agent-booster is installed and working
+- available: Whether the module loaded
+- editing: Whether hive_code_edit can actually delegate edits to it
 - version: Agent-booster version (if available)
 - speed: Performance comparison vs native editing`,
 

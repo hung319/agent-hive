@@ -27,11 +27,12 @@ const publishedExample = {
 };
 
 /**
- * V2 port: agents are generated into `.opencode/agents/<id>.md`. Read the
- * frontmatter fields (`model`, `temperature`) and the body (= prompt).
+ * V2 port: agents are generated into `<config>/agents/<id>.md` (global, inside
+ * the harness's isolated HOME). Read the frontmatter fields (`model`,
+ * `temperature`) and the body (= prompt).
  */
 function agentMd(harness: V2Harness, id: string): string | undefined {
-  const file = path.join(harness.projectDir, '.opencode', 'agents', `${id}.md`);
+  const file = path.join(harness.homeDir, '.config', 'opencode', 'agents', `${id}.md`);
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : undefined;
 }
 

@@ -52,11 +52,15 @@ interface V2PermissionRule {
 
 function toV2Permissions(permission?: Record<string, string>): V2PermissionRule[] {
   if (!permission) return [];
-  return Object.entries(permission).map(([action, effect]) => ({
-    action: V2_ACTION_ALIASES[action] ?? action,
-    resource: '*',
-    effect,
-  }));
+  const rules: V2PermissionRule[] = [];
+  for (const [action, effect] of Object.entries(permission)) {
+    const v2Action = V2_ACTION_ALIASES[action] ?? action;
+    // V1 maps often list several aliases for one V2 action (write/edit/patch),
+    // which would emit duplicate rules once aliased. Keep the first effect.
+    if (rules.some((rule) => rule.action === v2Action && rule.resource === '*')) continue;
+    rules.push({ action: v2Action, resource: '*', effect });
+  }
+  return rules;
 }
 
 /**
@@ -126,23 +130,91 @@ export function renderAgentMarkdown(
 }
 
 export interface WriteAgentDefinitionsInput {
-  /** Project location where `.opencode/agents/` lives. */
+  /** Project location; only used to clean up legacy project-local agent files. */
   directory: string;
   primaryAgent: string;
   /** Final agent map (agent id → V1-shaped runtime config). */
   agents: Record<string, RuntimeAgentConfig>;
+  /** Global config root (`$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`). */
+  configRoot: string;
 }
 
 /**
- * Write one `<id>.md` file per agent into `<project>/.opencode/agents/`.
+ * V1 installed agents once, globally; Hive now keeps every agent definition in
+ * the OpenCode config dir (next to `agent_hive.json`), so one plugin install
+ * serves every project. `OPENCODE_AGENTS_DIR` overrides the location.
+ */
+export function resolveGlobalAgentsDir(configRoot: string, env: NodeJS.ProcessEnv = process.env): string {
+  const override = normalizeTrimmed(env.OPENCODE_AGENTS_DIR);
+  if (override) return override;
+  return path.join(configRoot, 'agents');
+}
+
+/**
+ * Global OpenCode config root (`$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`),
+ * matching where Hive keeps `agent_hive.json`, skills and installed packages.
+ */
+export function resolveConfigRoot(env: NodeJS.ProcessEnv = process.env): string {
+  const xdg = normalizeTrimmed(env.XDG_CONFIG_HOME);
+  if (xdg) return path.join(xdg, 'opencode');
+  const home = normalizeTrimmed(env.HOME) ?? normalizeTrimmed(env.USERPROFILE) ?? '';
+  return path.join(home, '.config', 'opencode');
+}
+
+/**
+ * Project-local agent files written by earlier 2.x builds. They shadow the
+ * global definitions, so they are removed once the global ones are in place.
+ */
+export function legacyProjectAgentsDir(directory: string): string {
+  return path.join(directory, '.opencode', 'agents');
+}
+
+/**
+ * Remove project-local copies of Hive agents and prune the directory.
+ * Only files matching a Hive agent id are touched; user-authored agents in
+ * the same folder stay. Returns the paths that were removed.
+ */
+export function removeLegacyProjectAgents(
+  projectDirectory: string,
+  agentNames: Iterable<string>,
+): string[] {
+  const dir = legacyProjectAgentsDir(projectDirectory);
+  if (!fs.existsSync(dir)) return [];
+
+  const removed: string[] = [];
+  for (const agentName of agentNames) {
+    if (!agentName || agentName.includes('/') || agentName.includes('\\')) continue;
+    const filePath = path.join(dir, `${agentName}.md`);
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      fs.rmSync(filePath);
+      removed.push(filePath);
+    } catch {
+      // Best-effort cleanup: a read-only file must not break plugin setup.
+    }
+  }
+
+  try {
+    if (fs.readdirSync(dir).length === 0) {
+      fs.rmdirSync(dir);
+    }
+  } catch {
+    // Directory may be in use or already gone.
+  }
+  return removed;
+}
+
+/**
+ * Write one `<id>.md` file per agent into the global agents directory.
  * Idempotent: setup regenerated the files on every load so config changes
  * (model, custom agents, auto-loaded skills) are reflected next session.
  */
 export function writeAgentDefinitions(input: WriteAgentDefinitionsInput): {
   directory: string;
   written: string[];
+  removedLegacy: string[];
 } {
-  const agentsDir = path.join(input.directory, '.opencode', 'agents');
+  const agentsDir = resolveGlobalAgentsDir(input.configRoot);
   fs.mkdirSync(agentsDir, { recursive: true });
 
   const written: string[] = [];
@@ -154,7 +226,9 @@ export function writeAgentDefinitions(input: WriteAgentDefinitionsInput): {
     fs.writeFileSync(filePath, renderAgentMarkdown(agentName, definition));
     written.push(filePath);
   }
-  return { directory: agentsDir, written };
+
+  const removedLegacy = removeLegacyProjectAgents(input.directory, Object.keys(input.agents));
+  return { directory: agentsDir, written, removedLegacy };
 }
 
 /**

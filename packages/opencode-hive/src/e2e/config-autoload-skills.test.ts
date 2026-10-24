@@ -38,12 +38,12 @@ const TEST_ROOT_BASE = "/tmp/hive-config-autoload-skills-test";
 
 
 /**
- * V2 port: agents are generated into .opencode/agents/<id>.md whose body is
- * the agent prompt. This rebuilds the V1 opencodeConfig.agent record the
- * `hooks.config` hook used to mutate.
+ * V2 port: agents are generated into the global `<config>/agents/<id>.md`
+ * whose body is the agent prompt. This rebuilds the V1 opencodeConfig.agent
+ * record the `hooks.config` hook used to mutate.
  */
 function agentPromptsFromMd(harness: V2Harness): Record<string, { prompt: string }> {
-  const dir = path.join(harness.projectDir, ".opencode", "agents");
+  const dir = path.join(harness.homeDir, ".config", "opencode", "agents");
   const record: Record<string, { prompt: string }> = {};
   for (const file of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
     if (!file.endsWith(".md")) continue;

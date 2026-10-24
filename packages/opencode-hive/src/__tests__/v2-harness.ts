@@ -170,14 +170,21 @@ function unwrapCleanups(cleanup: unknown): Array<() => void> {
 
 /**
  * Build the legacy V1 `config.agent` record from the generated V2 agent
- * definitions: each `.opencode/agents/<id>.md` body becomes `prompt`.
+ * definitions: each `<config>/agents/<id>.md` body becomes `prompt`.
+ * Agent files are global (one install per machine), so they are read from the
+ * harness's isolated `$HOME` for isolated runs and from the ambient user config
+ * for runs that keep the real HOME.
  */
 export function agentPromptProxy(
-  harness: Pick<V2Harness, 'projectDir'>,
+  harness: Pick<V2Harness, 'projectDir' | 'homeDir'>,
 ): Record<string, { prompt: string }> {
-  const dir = path.join(harness.projectDir, '.opencode', 'agents');
   const out: Record<string, { prompt: string }> = {};
-  if (!fs.existsSync(dir)) return out;
+  const candidates = [
+    path.join(harness.homeDir, '.config', 'opencode', 'agents'),
+    path.join(harness.projectDir, '.opencode', 'agents'),
+  ];
+  const dir = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!dir) return out;
   for (const entry of fs.readdirSync(dir)) {
     if (!entry.endsWith('.md')) continue;
     const id = entry.replace(/\.md$/, '');

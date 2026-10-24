@@ -231,7 +231,7 @@ import { applyTaskBudget, applyContextBudget, DEFAULT_BUDGET, type TruncationEve
 import { writeWorkerPromptFile } from "./utils/prompt-file";
 import { formatRelativeTime } from "./utils/format";
 import { HIVE_SYSTEM_PROMPT, shouldExecuteHook } from "./hooks/system-hook.js";
-import { writeAgentDefinitions, toV2McpConfig, type RuntimeAgentConfig } from './agents/v2-bootstrap.js';
+import { writeAgentDefinitions, resolveConfigRoot, toV2McpConfig, type RuntimeAgentConfig } from './agents/v2-bootstrap.js';
 import {
   createLspDiagnosticsState,
   trackFileModification,
@@ -2745,12 +2745,18 @@ Use these tools when the task matches their purpose. They are available as regul
       }
 
       // === V2 agent bootstrap =============================================
-      // OpenCode V2 discovers agent definitions from `.opencode/agents/*.md`
+      // OpenCode V2 discovers agent definitions from `<config>/agents/*.md`
       // (plugin agent transforms cannot *add* agents, only update existing
-      // ones). The plugin writes generated definition files at setup, reloads
-      // the agent catalog, then wires the default agent + demotions.
+      // ones). Like V1, the definitions live in the global config dir so one
+      // install serves every project; project-local copies from earlier 2.x
+      // builds are removed because they shadow the global ones.
 
-      await writeAgentDefinitions({ directory, primaryAgent, agents: allAgents as Record<string, RuntimeAgentConfig> });
+      await writeAgentDefinitions({
+        directory,
+        primaryAgent,
+        agents: allAgents as Record<string, RuntimeAgentConfig>,
+        configRoot: resolveConfigRoot(),
+      });
       try {
         await ctx.agent.reload();
       } catch {
