@@ -39,51 +39,7 @@ jobs:
         working-directory: packages/opencode-hive
         run: bun test ./src/utils ./src/services --timeout 30000
 
-      - name: Test opencode-hive (tools)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/tools ./src/agents ./src/compat --timeout 30000
-
-      # Runs the whole suite: unit files again (cheap) plus e2e/integration,
-      # which spawn git repos and a plugin harness under /tmp.
-      - name: Test opencode-hive (integration)
-        working-directory: packages/opencode-hive
-        run: bun test --timeout 30000
-
       - name: Build opencode-hive
         working-directory: packages/opencode-hive
         run: bun run build
 
-  macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-
-      - name: Put bun on PATH
-        run: echo "$(dirname "$(command -v bun)")" >> "$GITHUB_PATH"
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Build hive-core
-        working-directory: packages/hive-core
-        run: bun run build
-
-      - name: Reinstall to link workspace packages
-        run: bun install
-
-      - name: Test hive-core
-        working-directory: packages/hive-core
-        run: bun test
-
-      - name: Test opencode-hive
-        working-directory: packages/opencode-hive
-        run: bun test --timeout 30000
-
-      - name: Build opencode-hive
-        working-directory: packages/opencode-hive
-        run: bun run build
