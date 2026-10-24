@@ -42,10 +42,13 @@ jobs:
       - name: Test opencode-hive (agent files)
         working-directory: packages/opencode-hive
         run: |
-          bun test ./src/agents/custom-agents.test.ts
-          bun test ./src/agents/global-agents.test.ts
-          bun test ./src/agents/permissions.test.ts
-          bun test ./src/agents/prompts.test.ts
+          set +e
+          for f in ./src/agents/custom-agents.test.ts ./src/agents/global-agents.test.ts ./src/agents/permissions.test.ts ./src/agents/prompts.test.ts; do
+            echo "===== $f"
+            bun test "$f" 2>&1 | tail -25
+            echo "===== $f rc=${PIPESTATUS[0]}"
+          done
+          exit 1
 
       - name: Test opencode-hive (skills)
         working-directory: packages/opencode-hive
