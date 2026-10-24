@@ -58,14 +58,16 @@ jobs:
 
       - name: G3 e2e identity
         working-directory: packages/opencode-hive
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: safe.directory
+          GIT_CONFIG_VALUE_0: '*'
         run: |
-          echo "whoami=$(whoami) HOME=$HOME"
           echo "name=[$(git config user.name 2>&1)]"
           echo "email=[$(git config user.email 2>&1)]"
           git config --global user.name > /tmp/gn.txt 2>&1; echo "global name rc=$?"
-          git config --get user.name > /tmp/gn2.txt 2>&1; echo "get name rc=$?"
-          git --version
-          env | grep -i '^GIT' | head -5
+          git status --short > /tmp/gs.txt 2>&1; echo "status rc=$?"
+          git -C "$GITHUB_WORKSPACE" status --short > /tmp/gs2.txt 2>&1; echo "status repo rc=$?"
           true
 
       - name: G4 agents
