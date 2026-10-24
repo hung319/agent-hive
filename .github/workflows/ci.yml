@@ -35,8 +35,10 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: T1 global-agents
+      - name: T2 minimal bun:test
         working-directory: packages/opencode-hive
-        env:
-          OPENCODE_AGENTS_DIR: ${{ runner.temp }}/agents-probe
-        run: bun test ./src/agents/global-agents.test.ts
+        run: bun test ./src/utils/format.test.ts
+
+      - name: T2b failing expect
+        working-directory: packages/opencode-hive
+        run: bun -e 'console.log("bun -e ok", process.cwd())'
