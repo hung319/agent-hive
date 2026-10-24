@@ -48,7 +48,15 @@ jobs:
 
       - name: Test opencode-hive
         working-directory: packages/opencode-hive
-        run: bun test
+        run: |
+          bun test > /tmp/opencode-hive-test.log 2>&1
+          rc=$?
+          echo "bun test exited with $rc"
+          echo "--- last 60 lines"
+          tail -60 /tmp/opencode-hive-test.log
+          echo "--- failing markers"
+          grep -n -E '^\(fail\)|error:|Cannot find module' /tmp/opencode-hive-test.log | head -20
+          exit $rc
 
       - name: Build opencode-hive
         working-directory: packages/opencode-hive
