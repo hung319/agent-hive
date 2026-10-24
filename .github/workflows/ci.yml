@@ -59,12 +59,7 @@ jobs:
       - name: G3 e2e identity
         working-directory: packages/opencode-hive
         run: |
-          set -x
-          git config user.name; echo "rc1=$?"
-          git status --short; echo "rc2=$?"
-          ls -la .git 2>&1; echo "rc3=$?"
-          ls -la ../../.git 2>&1 | head -5; echo "rc4=$?"
-          git -C ../.. config user.name; echo "rc5=$?"
+          git --version; echo "rc-version=$?"
           true
 
       - name: G4 agents
