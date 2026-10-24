@@ -57,4 +57,4 @@ jobs:
         run: bun test ./src/hooks ./src/skills ./src/__tests__
 
       - name: Probing
-        run: git status --short > /tmp/o6.txt; echo rc=$?
+        run: git config user.name > /tmp/o3.txt; echo rc=$?
