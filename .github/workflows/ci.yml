@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  linux:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -37,8 +37,14 @@ jobs:
 
       - name: Test opencode-hive (unit)
         working-directory: packages/opencode-hive
-        run: bun test src --timeout 30000
+        run: bun test ./src/utils ./src/services --timeout 30000
 
+      - name: Test opencode-hive (tools)
+        working-directory: packages/opencode-hive
+        run: bun test ./src/tools ./src/agents ./src/compat --timeout 30000
+
+      # Runs the whole suite: unit files again (cheap) plus e2e/integration,
+      # which spawn git repos and a plugin harness under /tmp.
       - name: Test opencode-hive (integration)
         working-directory: packages/opencode-hive
         run: bun test --timeout 30000
@@ -49,7 +55,6 @@ jobs:
 
   macos:
     runs-on: macos-latest
-
     steps:
       - uses: actions/checkout@v4
 
