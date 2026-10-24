@@ -35,24 +35,8 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: P5 custom-agents
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents/custom-agents.test.ts
-
-      - name: P6a global-agents with PWD set
+      - name: T1 global-agents
         working-directory: packages/opencode-hive
         env:
-          PWD: ${{ github.workspace }}/packages/opencode-hive
+          OPENCODE_AGENTS_DIR: ${{ runner.temp }}/agents-probe
         run: bun test ./src/agents/global-agents.test.ts
-
-      - name: P6b global-agents verbose
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents/global-agents.test.ts 2>&1 | head -60
-
-      - name: P7 permissions
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents/permissions.test.ts
-
-      - name: P8 prompts
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents/prompts.test.ts
