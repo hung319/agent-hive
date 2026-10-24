@@ -35,41 +35,9 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: Test opencode-hive (tools)
+      - name: Test opencode-hive
         working-directory: packages/opencode-hive
-        run: bun test ./src/tools ./src/mcp ./src/templates --timeout 30000
-
-      - name: Test opencode-hive (agent: custom)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents/custom-agents.test.ts --timeout 30000
-
-      - name: Test opencode-hive (agent: global)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents/global-agents.test.ts --timeout 30000
-
-      - name: Test opencode-hive (agent: permissions)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents/permissions.test.ts --timeout 30000
-
-      - name: Test opencode-hive (agent: prompts)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents/prompts.test.ts --timeout 30000
-
-      - name: Test opencode-hive (skills)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/skills --timeout 30000
-
-      - name: Test opencode-hive (hooks)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/hooks --timeout 30000
-
-      - name: Test opencode-hive (harness)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/__tests__ --timeout 30000
-
-      - name: Test opencode-hive (e2e)
-        working-directory: packages/opencode-hive
-        run: bun test ./src/e2e --timeout 30000
+        run: bun test --timeout 30000
 
       - name: Build opencode-hive
         working-directory: packages/opencode-hive
