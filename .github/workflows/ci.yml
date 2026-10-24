@@ -29,6 +29,7 @@ jobs:
           bun --version
           node --version
           npm --version
+          echo "$PATH"
           bun pm bin -g
 
       - name: Install dependencies
