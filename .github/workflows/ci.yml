@@ -56,5 +56,18 @@ jobs:
         working-directory: packages/opencode-hive
         run: bun test ./src/hooks ./src/skills ./src/__tests__
 
-      - name: Probing
-        run: git config --list --show-origin > /tmp/o2.txt; echo rc=$?
+      - name: G3 e2e identity
+        working-directory: packages/opencode-hive
+        run: |
+          echo "whoami=$(whoami) HOME=$HOME"
+          echo "name=[$(git config user.name 2>&1)]"
+          echo "email=[$(git config user.email 2>&1)]"
+          git config --global user.name > /tmp/gn.txt 2>&1; echo "global name rc=$?"
+          git config --get user.name > /tmp/gn2.txt 2>&1; echo "get name rc=$?"
+          git --version
+          env | grep -i '^GIT' | head -5
+          true
+
+      - name: G4 agents
+        working-directory: packages/opencode-hive
+        run: bun test ./src/agents
