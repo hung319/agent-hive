@@ -37,4 +37,9 @@ jobs:
 
       - name: Test opencode-hive
         working-directory: packages/opencode-hive
-        run: ls -la node_modules 2>&1 | head -10; ls -la ../../node_modules/@opencode 2>&1 | head -5; bun --version; echo "PATH=$PATH"
+        run: |
+          bun test 2>&1 | tee /tmp/opencode-hive-test.log
+          rc=${PIPESTATUS[0]}
+          echo "bun test rc=$rc"
+          tail -30 /tmp/opencode-hive-test.log
+          exit $rc
