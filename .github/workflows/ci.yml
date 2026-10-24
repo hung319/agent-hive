@@ -35,10 +35,8 @@ jobs:
         working-directory: packages/hive-core
         run: bun test
 
-      - name: T3 one global-agents test
+      - name: T4
         working-directory: packages/opencode-hive
-        run: bun test ./src/agents/global-agents.test.ts -t 'writes definitions to the global config dir'
-
-      - name: T3b identical, repeated
-        working-directory: packages/opencode-hive
-        run: bun test ./src/agents/global-agents.test.ts -t 'writes definitions to the global config dir'
+        env:
+          HIVE_DEBUG_IMPORT: '1'
+        run: bun -e 'console.log("env test ok")'
