@@ -43,17 +43,16 @@ jobs:
         working-directory: packages/opencode-hive
         run: |
           set +e
-          step() {
-            echo "===== $1"
+          run_one() {
             bun test "$1" > /tmp/oc-test.log 2>&1
             echo "===== $1 rc=$?"
             grep -n -E '^\(fail\)|error:|Cannot find|panic' /tmp/oc-test.log | head -6
             tail -4 /tmp/oc-test.log
           }
-          step ./src/agents/custom-agents.test.ts
-          step ./src/agents/global-agents.test.ts
-          step ./src/agents/permissions.test.ts
-          step ./src/agents/prompts.test.ts
+          run_one ./src/agents/custom-agents.test.ts
+          run_one ./src/agents/global-agents.test.ts
+          run_one ./src/agents/permissions.test.ts
+          run_one ./src/agents/prompts.test.ts
           exit 1
 
       - name: Test opencode-hive (skills)
