@@ -43,14 +43,17 @@ jobs:
         working-directory: packages/opencode-hive
         run: |
           set +e
-          for f in ./src/agents/custom-agents.test.ts ./src/agents/global-agents.test.ts ./src/agents/permissions.test.ts ./src/agents/prompts.test.ts; do
-            echo "===== $f"
-            bun test "$f" > /tmp/opencode-hive-agent-test.log 2>&1
-            rc=$?
-            echo "===== $f rc=$rc"
-            ls -la /tmp/opencode-hive-agent-test.log /tmp/hive-v2-home-* 2>&1 | head -5
-            find /tmp -maxdepth 1 -name 'hive-*' -newer "$GITHUB_WORKSPACE/package.json" 2>/dev/null | head -5
-          done
+          step() {
+            echo "===== $1"
+            bun test "$1" > /tmp/oc-test.log 2>&1
+            echo "===== $1 rc=$?"
+            grep -n -E '^\(fail\)|error:|Cannot find|panic' /tmp/oc-test.log | head -6
+            tail -4 /tmp/oc-test.log
+          }
+          step ./src/agents/custom-agents.test.ts
+          step ./src/agents/global-agents.test.ts
+          step ./src/agents/permissions.test.ts
+          step ./src/agents/prompts.test.ts
           exit 1
 
       - name: Test opencode-hive (skills)
