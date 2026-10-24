@@ -24,13 +24,16 @@ jobs:
         with:
           node-version: '20'
 
+      # Diagnostics: this step already failed with all four probes succeeding
+      # locally, without a log attached. `bash -x` traces every command so the
+      # next run names the failing one. Drop it once CI is green.
       - name: Verify toolchain
-        run: |
-          bun --version
-          node --version
-          npm --version
-          echo "$PATH"
-          bun pm bin -g
+        shell: bash
+        run: bash -x -c 'bun --version; node --version; npm --version; echo "PATH=$PATH"; bun pm bin -g' 2>&1 || {
+            rc=$?
+            echo "::error::toolchain probe exited with $rc"
+            exit $rc
+          }
 
       - name: Install dependencies
         run: bun install
