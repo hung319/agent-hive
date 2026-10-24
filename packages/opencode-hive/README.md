@@ -17,12 +17,12 @@ Add `@hung319/opencode-hive` to your `opencode.json`:
 }
 ```
 
-That's it. On first load, Hive auto-installs:
-- **Agent Tools**: `@sparkleideas/agent-booster` (52x faster code editing), `@sparkleideas/memory` (vector memory)
+That's it. On first use, Hive auto-installs:
 - **CLI Tools**: `auto-cr-cmd` (automated code review), `btca` (Bluetooth Classic Audio)
 - **RTK binary**: 60-90% token reduction by filtering shell output (100+ hand-tuned command filters)
 
-All tools fall back gracefully if installation fails — nothing breaks.
+All tools fall back gracefully if installation fails — nothing breaks. Code
+editing and memory are built in and need no package.
 
 ---
 
@@ -173,9 +173,10 @@ hive_code_edit({
 })
 ```
 
-## Vector Memory (Semantic Search)
+## Memory (Text Search)
 
-HNSW indexing for semantic memory search:
+Hive keeps memories in its own sharded JSON store under
+`~/.config/opencode/hive/vector-memory/` and searches them by text:
 
 ```typescript
 hive_vector_add({
@@ -186,6 +187,8 @@ hive_vector_add({
 
 hive_vector_search({ query: "async patterns", type: "learning", limit: 10 })
 ```
+
+No extra package is needed; `hive_vector_status` reports the store's size and shards.
 
 ## Prompt Budgeting
 

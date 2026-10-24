@@ -55,11 +55,15 @@ describe('resolveInstaller', () => {
 });
 
 describe('disabledToolReasons', () => {
-  test('skips @sparkleideas/memory with a documented reason', () => {
+  test('no longer lists the memory package (it is gone, not skipped)', () => {
     const reasons = disabledToolReasons();
-    expect(Object.keys(reasons)).toContain('@sparkleideas/memory');
-    expect(reasons['@sparkleideas/memory']).toMatch(/agentdb|dist/);
-    // agent-booster is still usable and must stay installable.
-    expect(Object.keys(reasons)).not.toContain('@sparkleideas/agent-booster');
+    // Hive stores memories itself now, so the package must not be installed
+    // under any status.
+    expect(Object.keys(reasons)).not.toContain('@sparkleideas/memory');
+  });
+
+  test('lists no sparkleideas packages: both were replaced by built-ins', () => {
+    const reasons = disabledToolReasons();
+    expect(Object.keys(reasons).some((name) => name.startsWith('@sparkleideas/'))).toBe(false);
   });
 });

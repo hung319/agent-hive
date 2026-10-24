@@ -2,10 +2,10 @@ import { tool, type ToolDefinition } from '../compat/v2-tool.js';
 import { VectorMemoryService, type MemoryMetadata } from '../services/vector-memory.js';
 
 /**
- * Vector Memory Tools
- * 
- * Enhanced memory search using vector embeddings and HNSW indexing.
- * Falls back to simple text search if @sparkleideas/memory unavailable.
+ * Memory Tools
+ *
+ * Text search over Hive's own sharded JSON store (see
+ * services/vector-memory.ts). No optional package is involved.
  */
 
 export const hiveVectorSearchTool: ToolDefinition = tool("hive_vector_search", {
@@ -125,11 +125,10 @@ Tags: javascript, promises, best-practice
 });
 
 export const hiveVectorStatusTool: ToolDefinition = tool("hive_vector_status", {
-  description: `Check vector memory status and statistics.
+  description: `Check memory status and statistics.
 
 **Returns:**
-- available: Whether @sparkleideas/memory is working
-- type: vector or fallback
+- type: storage backend (built-in sharded text store)
 - stats: Memory counts by type`,
 
   args: {},
@@ -140,9 +139,7 @@ export const hiveVectorStatusTool: ToolDefinition = tool("hive_vector_status", {
     const info: Record<string, unknown> = {
       status: status.available ? 'ready' : 'fallback',
       type: status.type,
-      backend: status.available 
-        ? '@sparkleideas/memory (HNSW + Vector)'
-        : 'Simple text search (sharded)',
+      backend: 'Built-in text search (sharded)',
       stats: status.stats,
     };
 
@@ -158,8 +155,7 @@ export const hiveVectorStatusTool: ToolDefinition = tool("hive_vector_status", {
 
     if (!status.available) {
       info.tips = [
-        'Text search fallback is intentional: no @sparkleideas/memory release on npm provides the vector API Hive needs.',
-        'Vector search returns automatically if a working @sparkleideas/memory becomes installable.',
+        'Memories are stored as sharded JSON and searched by text match; no optional package is required.',
       ];
     }
 

@@ -2,22 +2,22 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { getHiveNodeModulesPath, getGlobalNpmRoot } from '../utils/tool-installer.js';
 import { filterSensitiveData } from '../utils/sensitive-data-filter.js';
 import { safeStageAsync } from '../utils/safe-stage.js';
 import { setMemoryFilterConfig, getMemoryFilterConfig } from './memory-config.js';
 
 /**
- * Vector Memory Service
- * 
- * Enhanced memory system using @sparkleideas/memory for:
- * - HNSW indexing for fast similarity search
- * - Vector embeddings for semantic search
- * - Hybrid SQLite + AgentDB backend
- * 
- * Falls back to simple file-based storage if @sparkleideas/memory unavailable.
- * 
- * Fallback supports:
+ * Memory Service
+ *
+ * Stores project knowledge as sharded JSON files under
+ * `~/.config/opencode/hive/vector-memory/fallback` and searches them with
+ * text matching. No third-party memory package is involved.
+ *
+ * The layout and the `type: 'fallback'` status value are kept for
+ * compatibility: memories written by earlier 2.x builds stay readable, and
+ * `hive_vector_status` keeps the same shape.
+ *
+ * Features:
  * - **Sharding**: auto-rotate shards when max entries per shard is reached
  * - **Quality guards**: min content length, reject repeated chars
  * - **Deduplication**: exact hash-based dedup, optional near-duplicate detection
@@ -33,6 +33,7 @@ export interface MemoryMetadata {
 export interface VectorMemoryEntry {
   id: string;
   content: string;
+  /** Present only on entries written when a vector backend existed. */
   embedding?: number[];
   metadata: MemoryMetadata;
   createdAt: string;
@@ -89,94 +90,18 @@ export function setQualityConfig(config: {
 
 // Filter config is owned by memory-config.ts; setMemoryFilterConfig below is a compat re-export.
 
-// Lazy-loaded memory instance
-let memoryInstance: any = null;
-let memoryInitPromise: Promise<void> | null = null;
-
 /**
- * Initialize vector memory with lazy loading
+ * Kept for API compatibility: there is no backend to initialize.
  */
-async function initMemory(options?: {
+export async function initMemory(_options?: {
   indexPath?: string;
   dimensions?: number;
 }): Promise<void> {
-  if (memoryInstance !== null) {
-    return;
-  }
-  
-  if (memoryInitPromise !== null) {
-    await memoryInitPromise;
-    return;
-  }
-  
-  memoryInitPromise = (async () => {
-    try {
-      const hiveModules = getHiveNodeModulesPath();
-      const hivePkgPath = path.join(hiveModules, '@sparkleideas/memory');
-      let memory: any;
-      if (fs.existsSync(hivePkgPath)) {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        memory = require(hivePkgPath);
-      } else {
-        const globalRoot = getGlobalNpmRoot();
-        const globalPkgPath = globalRoot ? path.join(globalRoot, '@sparkleideas/memory') : '';
-        if (globalPkgPath && fs.existsSync(globalPkgPath)) {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          memory = require(globalPkgPath);
-        } else {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          memory = require('@sparkleideas/memory');
-        }
-      }
-      
-      // Initialize with options
-      const indexPath = options?.indexPath || path.join(os.homedir(), '.config', 'opencode', 'hive', 'vector-index');
-      const dimensions = options?.dimensions || 384;
-      
-      // Ensure index directory exists
-      fs.mkdirSync(indexPath, { recursive: true });
-      
-      // Validate API surface: v3 alpha exports classes (UnifiedMemoryService, HNSWIndex)
-      // not the facade {init,add,search}. Without this, Hive assigns the namespace as
-      // instance, reports "HNSW ready", but every add/search throws and silently falls back.
-      const hasFacade = (m: any) =>
-        m && typeof m.add === 'function' && typeof m.search === 'function';
-      let candidate: any = null;
-      if (memory.default && typeof memory.default.init === 'function' && hasFacade(memory.default)) {
-        candidate = memory.default;
-        await candidate.init({ indexPath, dimensions });
-      } else if (typeof memory.init === 'function' && hasFacade(memory)) {
-        candidate = memory;
-        await candidate.init({ indexPath, dimensions });
-      } else if (hasFacade(memory.default)) {
-        candidate = memory.default;
-      } else if (hasFacade(memory)) {
-        candidate = memory;
-      } else {
-        throw new Error(
-          `Incompatible @sparkleideas/memory API (found ${Object.keys(memory).join(',') || 'empty'}; need add/search). ` +
-          `Known good: none on npm (3.0.0-alpha has UnifiedMemoryService/HNSWIndex, 3.5.2-patch.1 tarball missing dist). ` +
-          `Falling back to file-based text search.`
-        );
-      }
-      memoryInstance = candidate;
-      
-      console.log('[vector-memory] Initialized successfully (facade validated)');
-    } catch (error) {
-      console.warn('[vector-memory] Failed to initialize:', error instanceof Error ? error.message : error);
-      memoryInstance = null;
-      // Reset the latch: the package may still be installing asynchronously.
-      // Without this, one early failure pins the process to fallback mode
-      // until restart (backend type oscillated between runs).
-      memoryInitPromise = null;
-    }
-  })();
-  
-  await memoryInitPromise;
+  ensureFallbackDir();
 }
 
 /**
- * Add a memory entry to the vector index
+ * Add a memory entry to the store
  */
 export async function addMemory(
   content: string,
@@ -184,30 +109,11 @@ export async function addMemory(
 ): Promise<{ id: string; success: boolean; fallback?: boolean; rejected?: boolean; reason?: string }> {
   // Apply sensitive data filter before saving (if configured)
   const filteredContent = filterSensitiveData(content, getMemoryFilterConfig());
-
-  // Try vector memory first
-  await initMemory();
-  
-  if (memoryInstance) {
-    try {
-      const id = await memoryInstance.add({
-        content: filteredContent,
-        metadata,
-      });
-      
-      return { id, success: true, fallback: false };
-    } catch (error) {
-      console.warn('[vector-memory] Failed to add with vector:', error instanceof Error ? error.message : error);
-      // Fall through to fallback
-    }
-  }
-  
-  // Fallback: simple file-based storage
-  return addMemoryFallback(filteredContent, metadata);
+  return addMemoryEntry(filteredContent, metadata);
 }
 
 /**
- * Search memories using vector similarity
+ * Search memories by text
  */
 export async function searchMemories(
   query: string,
@@ -218,36 +124,8 @@ export async function searchMemories(
     minScore?: number;
   } = {}
 ): Promise<{ results: SearchResult[]; fallback?: boolean }> {
-  const { limit = 10, type, scope, minScore = 0.0 } = options;
-  
-  // Try vector memory first
-  await initMemory();
-  
-  if (memoryInstance && typeof memoryInstance.search === 'function') {
-    try {
-      const searchResults = await memoryInstance.search(query, {
-        limit,
-        filter: { type, scope },
-        minScore,
-      });
-      
-      return {
-        results: searchResults.map((r: any) => ({
-          id: r.id,
-          content: r.content,
-          score: r.score || r.similarity || 0,
-          metadata: r.metadata || {},
-        })),
-        fallback: false,
-      };
-    } catch (error) {
-      console.warn('[vector-memory] Failed to search with vector:', error instanceof Error ? error.message : error);
-      // Fall through to fallback
-    }
-  }
-  
-  // Fallback: simple text search
-  return searchMemoriesFallback(query, { limit, type, scope });
+  const { limit = 10, type, scope } = options;
+  return searchMemoriesWithin(query, { limit, type, scope });
 }
 
 /**
@@ -262,71 +140,25 @@ export async function listMemories(
   } = {}
 ): Promise<{ results: SearchResult[]; fallback?: boolean }> {
   const { limit = 10, type, scope } = options;
-
-  await initMemory();
-
-  // Try vector memory first
-  if (memoryInstance && typeof memoryInstance.list === 'function') {
-    try {
-      const entries = await memoryInstance.list({ limit, filter: { type, scope } });
-      return {
-        results: entries.map((r: any) => ({
-          id: r.id,
-          content: r.content,
-          score: 1.0,
-          metadata: r.metadata || {},
-        })),
-        fallback: false,
-      };
-    } catch {
-      // Fall through to fallback
-    }
-  }
-
-  // Fallback: list all files sorted by creation time (newest first)
-  return listMemoriesFallback({ limit, type, scope });
+  return listMemoriesRecent({ limit, type, scope });
 }
 
 /**
  * Get a memory entry by ID
  */
 export async function getMemory(id: string): Promise<VectorMemoryEntry | null> {
-  await initMemory();
-  
-  if (memoryInstance && typeof memoryInstance.get === 'function') {
-    try {
-      const entry = await memoryInstance.get(id);
-      return entry;
-    } catch {
-      // Fall through to fallback
-    }
-  }
-  
-  // Fallback
-  return getMemoryFallback(id);
+  return getMemoryEntry(id);
 }
 
 /**
  * Delete a memory entry
  */
 export async function deleteMemory(id: string): Promise<boolean> {
-  await initMemory();
-  
-  if (memoryInstance && typeof memoryInstance.delete === 'function') {
-    try {
-      await memoryInstance.delete(id);
-      return true;
-    } catch {
-      // Fall through to fallback
-    }
-  }
-  
-  // Fallback
-  return deleteMemoryFallback(id);
+  return deleteMemoryEntry(id);
 }
 
 /**
- * Get vector memory status
+ * Get memory status
  */
 export async function getMemoryStatus(): Promise<{
   available: boolean;
@@ -341,24 +173,6 @@ export async function getMemoryStatus(): Promise<{
     maxEntries: number;
   };
 }> {
-  await initMemory();
-  
-  // A stats() probe failure must not flip the reported type to fallback:
-  // add/search still use the vector instance when it loaded.
-  if (memoryInstance) {
-    let stats: { total: number; byType?: Record<string, number> } = { total: 0 };
-    try {
-      stats = (await memoryInstance.stats?.()) || {};
-    } catch (error) {
-      console.warn('[vector-memory] stats() failed:', error instanceof Error ? error.message : error);
-    }
-    return {
-      available: true,
-      type: 'vector',
-      stats,
-    };
-  }
-  
   ensureFallbackDir();
   try {
     const fallbackStats = getFallbackStats() as { total: number; byType?: Record<string, number> };
@@ -372,7 +186,7 @@ export async function getMemoryStatus(): Promise<{
   } catch (error) {
     // Never throw from status — a throw here would surface the wrapper's
     // generic error object and contradict persisted data.
-    console.warn('[vector-memory] fallback stats failed:', error instanceof Error ? error.message : error);
+    console.warn('[vector-memory] stats failed:', error instanceof Error ? error.message : error);
     return {
       available: false,
       type: 'fallback',
@@ -382,7 +196,7 @@ export async function getMemoryStatus(): Promise<{
 }
 
 // ============================================================================
-// Fallback Implementation (Sharded, with Quality Guards + Dedup)
+// Sharded storage (with Quality Guards + Dedup)
 // ============================================================================
 
 // ---------------------------------------------------------------------------
@@ -494,7 +308,7 @@ function readAllShardFiles(): Array<{ filePath: string; mtime: Date }> {
     }
   }
 
-  // Sort newest-first (for listMemories) or leave as-is (for search)
+  // Sort newest-first (for list) or leave as-is (for search)
   return files.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 }
 
@@ -601,7 +415,7 @@ function checkDuplicate(
 // CRUD operations (sharded)
 // ---------------------------------------------------------------------------
 
-async function addMemoryFallback(
+async function addMemoryEntry(
   content: string,
   metadata: MemoryMetadata
 ): Promise<{ id: string; success: boolean; fallback: true; rejected?: boolean; reason?: string }> {
@@ -633,7 +447,7 @@ async function addMemoryFallback(
   return { id, success: true, fallback: true };
 }
 
-async function searchMemoriesFallback(
+async function searchMemoriesWithin(
   query: string,
   options: { limit?: number; type?: string; scope?: string }
 ): Promise<{ results: SearchResult[]; fallback: true }> {
@@ -691,7 +505,7 @@ async function searchMemoriesFallback(
   };
 }
 
-async function listMemoriesFallback(
+async function listMemoriesRecent(
   options: { limit?: number; type?: string; scope?: string }
 ): Promise<{ results: SearchResult[]; fallback: true }> {
   const { limit = 10, type, scope } = options;
@@ -724,7 +538,7 @@ async function listMemoriesFallback(
   return { results: entries, fallback: true };
 }
 
-async function getMemoryFallback(id: string): Promise<VectorMemoryEntry | null> {
+async function getMemoryEntry(id: string): Promise<VectorMemoryEntry | null> {
   const filePath = findFileById(id);
   if (!filePath) return null;
 
@@ -736,7 +550,7 @@ async function getMemoryFallback(id: string): Promise<VectorMemoryEntry | null> 
   }
 }
 
-async function deleteMemoryFallback(id: string): Promise<boolean> {
+async function deleteMemoryEntry(id: string): Promise<boolean> {
   const filePath = findFileById(id);
   if (!filePath) return false;
 

@@ -418,10 +418,10 @@ const plugin = Plugin.define({
     console.log(`[hive:shell-path] Added PATH to: ${pathResult.added.join(', ')}`);
   }
 
-  // Tool packages (@sparkleideas/agent-booster, bun-pty, auto-cr-cmd, btca)
-  // are no longer installed from setup: a plugin load must not reach the
-  // network, and a failing install must not change that load's outcome. They
-  // install on first use; hive_status shows what is still missing.
+  // Tool packages (bun-pty, auto-cr-cmd, btca) are no longer installed from
+  // setup: a plugin load must not reach the network, and a failing install must
+  // not change that load's outcome. They install on first use; hive_status
+  // shows what is still missing.
   void getRtkBootPromise().catch(() => {});
   void getLspBootPromise().catch(() => {});
   void getCodegraphBootPromise(directory).catch(() => {});

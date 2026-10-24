@@ -1,10 +1,11 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
-describe('Agent Booster Tools', () => {
-  const testDir = '/tmp/hive-agent-booster-test';
-  
+describe('Code edit tools (built-in engine)', () => {
+  const testDir = path.join(os.tmpdir(), 'hive-agent-booster-test');
+
   beforeEach(() => {
     // Clean up test directory
     if (fs.existsSync(testDir)) {
@@ -12,56 +13,57 @@ describe('Agent Booster Tools', () => {
     }
     fs.mkdirSync(testDir, { recursive: true });
   });
-  
+
   describe('applyCodeEdit', () => {
     test('should apply simple edit', async () => {
       const testFile = path.join(testDir, 'test.ts');
       fs.writeFileSync(testFile, 'const old = "value";\n', 'utf-8');
-      
-      // Since agent-booster may not be installed, this will use fallback
+
       const { applyCodeEdit } = await import('../tools/agent-booster.js');
-      
+
       const result = await applyCodeEdit({
         path: testFile,
         oldContent: 'const old = "value";',
         newContent: 'const new = "updated";',
       });
-      
+
       expect(result.success).toBe(true);
-      
+
       const content = fs.readFileSync(testFile, 'utf-8');
       expect(content).toBe('const new = "updated";\n');
     });
-    
+
     test('should handle file not found', async () => {
       const { applyCodeEdit } = await import('../tools/agent-booster.js');
-      
+
       const result = await applyCodeEdit({
         path: '/nonexistent/file.ts',
         oldContent: 'test',
         newContent: 'replacement',
       });
-      
+
       expect(result.success).toBe(false);
       expect(result.error).toContain('not found');
     });
-    
+
     test('should handle content not found', async () => {
       const testFile = path.join(testDir, 'test.ts');
       fs.writeFileSync(testFile, 'const original = "content";\n', 'utf-8');
-      
+
       const { applyCodeEdit } = await import('../tools/agent-booster.js');
-      
+
       const result = await applyCodeEdit({
         path: testFile,
         oldContent: 'nonexistent content',
         newContent: 'replacement',
       });
-      
+
       expect(result.success).toBe(false);
+      // A failed match must leave the file as it was.
+      expect(fs.readFileSync(testFile, 'utf-8')).toBe('const original = "content";\n');
     });
 
-    test('reports which engine applied the edit', async () => {
+    test('reports which matcher applied the edit', async () => {
       const testFile = path.join(testDir, 'engine.ts');
       fs.writeFileSync(testFile, 'export const VERSION = "1.0.0";\n', 'utf-8');
 
@@ -74,13 +76,11 @@ describe('Agent Booster Tools', () => {
       });
 
       expect(result.success).toBe(true);
-      // Either the booster or the deterministic fallback is acceptable, but the
-      // caller must see which one ran (regression: booster was silently skipped).
-      expect(result.applied).toMatch(/Applied via (agent-booster|fallback|native fallback)/);
+      expect(result.applied).toMatch(/Applied via (exact|fuzzy_indent)/);
       expect(fs.readFileSync(testFile, 'utf-8')).toBe('export const VERSION = "2.0.0";\n');
     });
 
-    test('preserves surrounding lines when the booster edits a symbol', async () => {
+    test('preserves surrounding lines when editing one statement', async () => {
       const testFile = path.join(testDir, 'surrounding.ts');
       const original = [
         '// header comment',
@@ -110,44 +110,94 @@ describe('Agent Booster Tools', () => {
     });
   });
 
-  describe('resolveBoosterApi', () => {
-    test('instantiates a default-exported class instead of calling it', async () => {
-      const { resolveBoosterApi } = await import('../tools/agent-booster.js');
+  describe('indentation-insensitive matching', () => {
+    test('applies an edit whose indentation no longer matches the file', async () => {
+      const testFile = path.join(testDir, 'reindented.ts');
+      // The file is indented with 4 spaces, oldContent uses 2.
+      const original = [
+        'function outer() {',
+        '    if (ready) {',
+        '        run();',
+        '    }',
+        '}',
+        '',
+      ].join('\n');
+      fs.writeFileSync(testFile, original, 'utf-8');
 
-      class FakeBooster {
-        apply(request: { code: string }) {
-          return Promise.resolve({ success: true, code: request.code, strategy: 'fake', confidence: 0.9 });
-        }
-      }
-
-      const api = resolveBoosterApi({ default: FakeBooster, AgentBooster: FakeBooster });
-      expect(api).not.toBeNull();
-      const result = await api!.apply({ code: 'x', edit: 'y', language: 'typescript' });
-      expect(result.strategy).toBe('fake');
-    });
-
-    test('uses a named apply export', async () => {
-      const { resolveBoosterApi } = await import('../tools/agent-booster.js');
-      const api = resolveBoosterApi({
-        apply: (request: { code: string }) => Promise.resolve({ success: true, code: request.code }),
+      const { applyCodeEdit } = await import('../tools/agent-booster.js');
+      const result = await applyCodeEdit({
+        path: testFile,
+        oldContent: '  if (ready) {\n    run();\n  }',
+        newContent: '  if (ready) {\n    runTwice();\n  }',
       });
-      expect(api).not.toBeNull();
-      await expect(api!.apply({ code: 'a', edit: 'b', language: 'javascript' })).resolves.toMatchObject({
-        success: true,
+
+      expect(result.success).toBe(true);
+      expect(result.applied).toContain('fuzzy_indent');
+      const content = fs.readFileSync(testFile, 'utf-8');
+      // The file keeps its 4-space indentation: oldContent's first line sat at
+      // 2 spaces inside a 4-space file, so the matched block starts at 4 and
+      // every line keeps its relative depth (run() was 2 deeper).
+      expect(content).toBe([
+        'function outer() {',
+        '    if (ready) {',
+        '      runTwice();',
+        '    }',
+        '}',
+        '',
+      ].join('\n'));
+    });
+
+    test('prefers an exact match over the indentation-insensitive one', async () => {
+      const testFile = path.join(testDir, 'exact-first.ts');
+      fs.writeFileSync(testFile, '  const a = 1;\n', 'utf-8');
+
+      const { applyCodeEdit } = await import('../tools/agent-booster.js');
+      const result = await applyCodeEdit({
+        path: testFile,
+        oldContent: '  const a = 1;',
+        newContent: '  const a = 2;',
       });
+
+      expect(result.success).toBe(true);
+      expect(result.applied).toContain('exact');
     });
 
-    test('ignores the inherited Function.prototype.apply of a module object', async () => {
-      const { resolveBoosterApi } = await import('../tools/agent-booster.js');
-      // A bare function object has no own `apply`, only Function.prototype's.
-      const moduleLike = Object.assign(function notAnApi() {}, {});
-      expect(resolveBoosterApi(moduleLike)).toBeNull();
+    test('does not match a line that differs beyond whitespace', async () => {
+      const testFile = path.join(testDir, 'no-match.ts');
+      fs.writeFileSync(testFile, '    const a = 1;\n', 'utf-8');
+
+      const { applyCodeEdit } = await import('../tools/agent-booster.js');
+      const result = await applyCodeEdit({
+        path: testFile,
+        oldContent: 'const b = 1;',
+        newContent: 'const b = 2;',
+      });
+
+      expect(result.success).toBe(false);
+      expect(fs.readFileSync(testFile, 'utf-8')).toBe('    const a = 1;\n');
+    });
+  });
+
+  describe('findIgnoringIndent', () => {
+    test('returns the span and the file indentation', async () => {
+      const { findIgnoringIndent } = await import('../tools/agent-booster.js');
+      const content = 'a\n\t\tb\n\t\tc\nd\n';
+      const span = findIgnoringIndent(content, '  b\n  c');
+      expect(span).not.toBeNull();
+      expect(content.slice(span!.start, span!.end)).toBe('\t\tb\n\t\tc');
+      expect(span!.indent).toBe('\t\t');
     });
 
-    test('returns null for objects without an apply API', async () => {
-      const { resolveBoosterApi } = await import('../tools/agent-booster.js');
-      expect(resolveBoosterApi({})).toBeNull();
-      expect(resolveBoosterApi(null)).toBeNull();
+    test('includes the newline when oldContent ends with one', async () => {
+      const { findIgnoringIndent } = await import('../tools/agent-booster.js');
+      const content = 'keep\n  drop\ntail\n';
+      const span = findIgnoringIndent(content, 'drop\n');
+      expect(content.slice(span!.start, span!.end)).toBe('  drop\n');
+    });
+
+    test('returns null for CRLF content instead of guessing offsets', async () => {
+      const { findIgnoringIndent } = await import('../tools/agent-booster.js');
+      expect(findIgnoringIndent('a\r\nb\r\n', 'b')).toBeNull();
     });
   });
 
@@ -187,30 +237,16 @@ describe('Agent Booster Tools', () => {
       expect(merged).not.toContain('// ... existing code ...');
     });
   });
-  
-  describe('isBoosterAvailable', () => {
-    test('should return boolean', async () => {
-      const { isBoosterAvailable } = await import('../tools/agent-booster.js');
-      const available = await isBoosterAvailable();
-      expect(typeof available).toBe('boolean');
-    });
-  });
-  
+
   describe('getBoosterStatus', () => {
-    test('should return status object', async () => {
+    test('reports a ready built-in engine with no package to install', async () => {
       const { getBoosterStatus } = await import('../tools/agent-booster.js');
       const status = await getBoosterStatus();
-      
-      expect(status).toHaveProperty('available');
-      expect(typeof status.available).toBe('boolean');
-    });
 
-    test('reports editing capability when the module is loaded', async () => {
-      const { getBoosterStatus, isBoosterAvailable } = await import('../tools/agent-booster.js');
-      if (!(await isBoosterAvailable())) return;
-      const status = await getBoosterStatus();
-      expect(status.capabilities).toBeDefined();
-      expect(status.editing).toBe(status.capabilities?.apply === true);
+      expect(status.available).toBe(true);
+      expect(status.editing).toBe(true);
+      expect(status.capabilities).toEqual({ apply: true, lazyApply: true });
+      expect(status.notes?.join(' ')).toContain('Built-in');
     });
   });
 });

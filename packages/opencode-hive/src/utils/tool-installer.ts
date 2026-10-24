@@ -62,17 +62,6 @@ interface ToolEntry {
 }
 
 const TOOLS: ToolEntry[] = [
-  { name: '@sparkleideas/agent-booster', version: '0.2.34', category: 'agent' },
-  // No published release of @sparkleideas/memory provides the facade API Hive
-  // needs (`add`/`search`); the three.js chain also wants `@sparkleideas/agentdb@alpha`,
-  // whose tarballs ship without `dist/` (require fails). Installing it therefore
-  // can never enable vector search, so it is disabled: hive_vector_* stays on
-  // the documented sharded text-search fallback.
-  {
-    name: '@sparkleideas/memory',
-    category: 'agent',
-    disabledReason: 'no usable release on npm (missing dist/ + missing agentdb@alpha); vector memory runs on text-search fallback',
-  },
   { name: 'bun-pty', category: 'agent' },
   // auto-cr ships its executable as `check`; `auto-cr-cmd` is kept as an
   // alias so both names resolve after install.

@@ -31,9 +31,9 @@ import { getMemoryFilterConfig } from '../services/memory-config.js';
  *    typed memory for knowledge you will recall by scope/type, journal for
  *    dated "what happened" records. Tools: hive_journal_write/search.
  *
- * 4. Vector memory (services/vector-memory.ts) — semantic search over
- *    embeddings (HNSW via @sparkleideas/memory, sharded JSON fallback).
- *    This is the retrieval layer for "find similar past knowledge".
+ * 4. Vector memory (services/vector-memory.ts) — text search over sharded
+ *    JSON entries. This is the retrieval layer for "find similar past
+ *    knowledge".
  *    Tools: hive_vector_add/search/status.
  *
  * All write paths share the sensitive-data filter configured once in

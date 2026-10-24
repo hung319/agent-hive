@@ -18,7 +18,7 @@ describe('Vector Memory Service', () => {
     test('should add memory with fallback storage', async () => {
       const { VectorMemoryService } = await import('../services/vector-memory.js');
       
-      // Force fallback mode by not having @sparkleideas/memory
+      // Storage is always the built-in sharded text store
       const result = await VectorMemoryService.add('Test memory content', {
         type: 'learning',
         scope: 'test',
@@ -207,8 +207,9 @@ describe('Vector Memory Service', () => {
       
       expect(status).toHaveProperty('available');
       expect(status).toHaveProperty('type');
-      // Type depends on whether @sparkleideas/memory is installed
-      expect(['fallback', 'vector']).toContain(status.type);
+      // The built-in text store is the only backend.
+      expect(status.type).toBe('fallback');
+      expect(status.available).toBe(false);
     });
   });
 
