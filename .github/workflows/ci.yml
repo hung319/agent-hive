@@ -47,10 +47,9 @@ jobs:
             echo "===== $f"
             bun test "$f" > /tmp/opencode-hive-agent-test.log 2>&1
             rc=$?
-            echo "===== $f rc=$rc lines=$(wc -l < /tmp/opencode-hive-agent-test.log)"
-            head -3 /tmp/opencode-hive-agent-test.log
-            grep -n -E '^\(fail\)|error:|Cannot find module|panic' /tmp/opencode-hive-agent-test.log | head -8
-            tail -6 /tmp/opencode-hive-agent-test.log
+            echo "===== $f rc=$rc"
+            ls -la /tmp/opencode-hive-agent-test.log /tmp/hive-v2-home-* 2>&1 | head -5
+            find /tmp -maxdepth 1 -name 'hive-*' -newer "$GITHUB_WORKSPACE/package.json" 2>/dev/null | head -5
           done
           exit 1
 
