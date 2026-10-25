@@ -292,14 +292,6 @@ export interface HiveConfig {
     /** Custom RTK path (default: 'rtk') */
     command?: string;
   };
-  /** Agent Booster - Ultra-fast code editing (Rust+WASM, 52x faster than Morph, FREE) */
-  agentBooster?: {
-    enabled?: boolean;
-    /** Server URL (default: http://localhost:3001) */
-    serverUrl?: string;
-    /** Server port (default: 3001) */
-    serverPort?: number;
-  };
   /** Vector memory - HNSW indexing and semantic search */
   vectorMemory?: {
     enabled?: boolean;
@@ -474,12 +466,6 @@ export const DEFAULT_HIVE_CONFIG: HiveConfig = {
   rtk: {
     enabled: false,  // Disabled by default, requires RTK CLI
     command: 'rtk',
-  },
-  // Agent Booster: Ultra-fast code editing (52x faster, FREE)
-  agentBooster: {
-    enabled: false,
-    serverUrl: 'http://localhost:3001',
-    serverPort: 3001,
   },
   // Vector memory: Semantic search enhancement
   vectorMemory: {

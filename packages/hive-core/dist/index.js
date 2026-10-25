@@ -852,11 +852,6 @@ var DEFAULT_HIVE_CONFIG = {
     enabled: false,
     command: "rtk"
   },
-  agentBooster: {
-    enabled: false,
-    serverUrl: "http://localhost:3001",
-    serverPort: 3001
-  },
   vectorMemory: {
     enabled: false,
     indexPath: path.join(os.homedir(), ".config", "opencode", "hive", "vector-index"),

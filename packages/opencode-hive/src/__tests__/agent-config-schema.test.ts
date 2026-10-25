@@ -46,3 +46,47 @@ describe('agent_hive schema customAgents contract', () => {
     expectReservedNameToFail('code');
   });
 });
+
+describe('agent_hive schema covers every HiveConfig key', () => {
+  /**
+   * The schema sets additionalProperties: false, so any config key the code
+   * reads but the schema omits is flagged red by editors — a valid
+   * agent_hive.json that VSCode/Zed refuses to accept. This test derives the
+   * key list from the type definition so the two cannot drift again.
+   */
+  const typesPath = path.resolve(
+    import.meta.dir, '..', '..', '..', 'hive-core', 'src', 'types.ts',
+  );
+
+  function hiveConfigKeys(): string[] {
+    const source = fs.readFileSync(typesPath, 'utf-8');
+    const body = source.match(/export interface HiveConfig\b[\s\S]*?\n\}/);
+    expect(body).not.toBeNull();
+    return [...body![0].matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]!);
+  }
+
+  it('declares every key read from HiveConfig', () => {
+    const declared = new Set(Object.keys(schema.properties ?? {}));
+    const missing = hiveConfigKeys().filter((key) => !declared.has(key));
+    expect(missing).toEqual([]);
+  });
+
+  it('does not declare agentBooster: the package it configured is gone', () => {
+    expect(schema.properties).not.toHaveProperty('agentBooster');
+    expect(hiveConfigKeys()).not.toContain('agentBooster');
+  });
+
+  it('declares rtk and snip is not a config key', () => {
+    expect(schema.properties.rtk).toBeDefined();
+    // snip was replaced by RTK in 1.20.0; the old key must not come back.
+    expect(hiveConfigKeys()).not.toContain('snip');
+    expect(schema.properties).not.toHaveProperty('snip');
+  });
+
+  it('keeps nested schemas closed too', () => {
+    for (const key of ['vectorMemory', 'hiddenJudge', 'userProfile', 'tokenTruncation', 'sessionSnapshot', 'rtk']) {
+      expect(schema.properties[key]?.additionalProperties).toBe(false);
+    }
+  });
+});
+

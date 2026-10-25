@@ -27,7 +27,7 @@ import {
 import { skillMcpTool, listSkillMcpsTool } from './tools/skill-mcp.js';
 // Memory Tools
 import { hiveMemoryListTool, hiveMemorySetTool, hiveMemoryReplaceTool, hiveJournalWriteTool, hiveJournalSearchTool, hiveMemoryRecallTool, hiveMemoryCreateTool, hiveMemoryUpdateTool, hiveMemoryForgetTool, buildMemoryInjection, ensureMemorySeeded, readProjectMemoryBody, writeProjectMemoryBody } from './tools/memory.js';
-// Agent Booster Tools (ultra-fast code editing)
+// Code Editing Tools (built-in engine, see tools/agent-booster.ts)
 import { hiveCodeEditTool, hiveLazyEditTool, hiveBoosterStatusTool } from './tools/agent-booster.js';
 // Vector Memory Tools (semantic search)
 import { hiveVectorSearchTool, hiveVectorAddTool, hiveVectorStatusTool } from './tools/vector-memory.js';
@@ -1686,7 +1686,7 @@ ${snapshot}
       hive_journal_write: hiveJournalWriteTool,
       hive_journal_search: hiveJournalSearchTool,
 
-      // Agent Booster Tools (ultra-fast code editing, 52x faster)
+      // Code Editing Tools (built-in engine)
       hive_code_edit: hiveCodeEditTool,
       hive_lazy_edit: hiveLazyEditTool,
       hive_booster_status: hiveBoosterStatusTool,

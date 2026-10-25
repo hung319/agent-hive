@@ -134,6 +134,327 @@
         }
       }
     },
+    "vectorMemory": {
+      "type": "object",
+      "description": "Hive's memory store (sharded JSON under ~/.config/opencode/hive/vector-memory/), searched by text. Every sub-feature here defaults to on unless explicitly disabled.",
+      "properties": {
+        "autoRecall": {
+          "type": "object",
+          "description": "Inject recent memories into the system prompt.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Inject memories each turn. Set false to disable."
+            },
+            "maxMemories": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5,
+              "description": "Memories injected per turn."
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "decision",
+                  "learning",
+                  "preference",
+                  "blocker",
+                  "context",
+                  "pattern"
+                ]
+              },
+              "description": "Restrict to these memory types. Only the first entry is currently used."
+            },
+            "scope": {
+              "type": "string",
+              "description": "Restrict to one scope (e.g. 'auth', 'api')."
+            }
+          },
+          "additionalProperties": false
+        },
+        "autoCapture": {
+          "type": "object",
+          "description": "Save a memory when the session compacts.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Capture on compaction. Set false to disable."
+            },
+            "type": {
+              "type": "string",
+              "default": "context",
+              "description": "Memory type used for captured snapshots."
+            },
+            "includePendingTasks": {
+              "type": "boolean",
+              "default": true,
+              "description": "Include pending task names in the capture."
+            },
+            "provider": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "manual",
+                    "opencode"
+                  ],
+                  "default": "manual",
+                  "description": "How captured content is produced."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "sharding": {
+          "type": "object",
+          "description": "Rotate memory files into new shards as the store grows.",
+          "properties": {
+            "maxEntriesPerShard": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 500,
+              "description": "Entries per shard before rotating."
+            }
+          },
+          "additionalProperties": false
+        },
+        "quality": {
+          "type": "object",
+          "description": "Quality guards applied before a memory is stored.",
+          "properties": {
+            "minContentLength": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 10,
+              "description": "Reject shorter content."
+            },
+            "rejectRepeatedChars": {
+              "type": "boolean",
+              "default": true,
+              "description": "Reject content like 'aaaaaaaaaa'."
+            },
+            "enableDedup": {
+              "type": "boolean",
+              "default": true,
+              "description": "Reject exact duplicates within the same type and scope."
+            },
+            "enableNearDedup": {
+              "type": "boolean",
+              "default": false,
+              "description": "Also reject near-duplicate content (scans every entry)."
+            }
+          },
+          "additionalProperties": false
+        },
+        "memoryFilter": {
+          "type": "object",
+          "description": "Redact sensitive data before it is written to memory.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Apply the filter."
+            },
+            "customPatterns": {
+              "type": "array",
+              "description": "Extra patterns to redact.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "pattern": {
+                    "type": "string",
+                    "description": "Regular expression source."
+                  }
+                },
+                "required": [
+                  "name",
+                  "pattern"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "redactEmails": {
+              "type": "boolean",
+              "default": false,
+              "description": "Also redact email addresses."
+            }
+          },
+          "additionalProperties": false
+        },
+        "autoSaveProject": {
+          "type": "object",
+          "description": "Append session context to project memory during compaction.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Auto-save on compaction. Set false to disable."
+            },
+            "maxEntries": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 20,
+              "description": "Entries kept; the oldest are removed first."
+            }
+          },
+          "additionalProperties": false
+        },
+        "compactionRestoration": {
+          "type": "object",
+          "description": "Re-inject memories into the session after compaction.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Re-inject after compaction. Set false to disable."
+            },
+            "maxMemories": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5,
+              "description": "Memories re-injected per compaction."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "hiddenJudge": {
+      "type": "object",
+      "description": "Verify task completion with heuristics plus an LLM check. Off by default: the judge spends tokens.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the judge."
+        },
+        "maxRetries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retries per task before stopping (default: 3)."
+        },
+        "minToolCalls": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tool calls before the judge activates (default: 5)."
+        },
+        "writeRatioThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Writes/total below this is flagged as a planning loop (default: 0.1)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "userProfile": {
+      "type": "object",
+      "description": "Periodic analysis of user preferences. Opt-in for privacy.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable profile analysis."
+        },
+        "analysisInterval": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "User messages between analyses (default: 10)."
+        },
+        "maxPreferences": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Stored preferences kept (default: 20)."
+        },
+        "confidenceDecayDays": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Days before a preference's confidence halves (default: 30)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "tokenTruncation": {
+      "type": "object",
+      "description": "Compress large tool outputs to save context.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Truncate outputs. Off unless set true."
+        },
+        "maxChars": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 30000,
+          "description": "Size above which an output is truncated."
+        },
+        "keepFirstPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 40,
+          "description": "Share of the output kept from the start."
+        },
+        "keepLastPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 40,
+          "description": "Share of the output kept from the end."
+        }
+      },
+      "additionalProperties": false
+    },
+    "sessionSnapshot": {
+      "type": "object",
+      "description": "Capture session state before compaction so work can continue afterwards.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Capture a snapshot. Set false to disable."
+        },
+        "maxSnapshotChars": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2048,
+          "description": "Maximum snapshot size."
+        },
+        "includeActiveFeature": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the active feature and its status."
+        },
+        "includePendingTasks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include pending tasks."
+        },
+        "includeModifiedFiles": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include modified files."
+        }
+      },
+      "additionalProperties": false
+    },
+    "omoSlimEnabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable OMO-Slim delegation (optional integration)."
+    },
     "rtk": {
       "type": "object",
       "description": "Shell output compression via RTK, when an `rtk` binary is on PATH. Hive never downloads it: shell commands are only prefixed with the configured binary.",
