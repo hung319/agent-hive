@@ -5,7 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0] - 2026-10-25
+
+### Skills & agents upgraded from obra/superpowers
+
 - Fix: skill `description` viết bằng **YAML block scalar** (`description: |` rồi xuống dòng) bị đọc thành đúng một ký tự `"|"` — skill `ponytail` đi kèm package đang ở tình trạng này, nên nó không bao giờ được chọn vì description không nêu trigger nào. Cả `scripts/generate-skills.ts` và `src/skills/file-loader.ts` giờ đọc đúng cả `|` và `>`, gộp thành một dòng. Test mới phủ cả hai kiểu
 - Fix: `ask-questions-if-underspecified` và `ponytail` có description mở đầu bằng chủ đề thay vì trigger; test mới bắt buộc mọi skill builtin phải có description ≥ 20 ký tự và bắt đầu bằng "Use when/before/after/during"
 - Skills: viết lại `brainstorming` — bản cũ chỉ 53 dòng và bắt hỏi từng câu kể cả khi request đã rõ. Bản mới có cổng "bạn thực sự biết gì?" (việc đã quyết thì làm luôn, đừng tra khảo), nguyên tắc đọc code/plan trước khi hỏi, mỗi câu hỏi phải nói rõ câu trả lời sẽ đổi gì, và sửa chỗ mâu thuẫn: bản cũ dặn ghi design vào `docs/plans/` trong khi Hive lưu plan ở `.hive/features/<f>/plan.md`
