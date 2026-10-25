@@ -420,12 +420,18 @@ export const DEFAULT_HIVE_CONFIG: HiveConfig = {
     'zetta': {
       temperature: 0.5,
       skills: [],
-      autoLoadSkills: ['parallel-exploration'],
+      // No default autoLoadSkills: this agent makes on the order of a hundred
+      // turns per session, and an auto-loaded skill's whole body is paid on
+      // every one of them. zetta's prompt already routes fan-out work through
+      // hive_skill("parallel-exploration") when it actually happens.
+      autoLoadSkills: [],
     },
     'architect-planner': {
       temperature: 0.7,
       skills: [],
-      autoLoadSkills: ['parallel-exploration'],
+      // Same reasoning as zetta: planning rarely fans out, and the prompt names
+      // the skill for the case where it does.
+      autoLoadSkills: [],
     },
     'swarm-orchestrator': {
       temperature: 0.5,

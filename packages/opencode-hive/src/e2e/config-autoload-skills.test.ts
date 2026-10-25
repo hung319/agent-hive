@@ -84,41 +84,38 @@ describe("config hook autoLoadSkills injection", () => {
   });
 
   it("injects default autoLoadSkills into agent prompt in config hook (unified mode)", async () => {
-    // The config must live in the temp HOME this test sets *before* setup runs:
-    // setup resolves the config dir from HOME, so a config written anywhere
-    // else is silently ignored.
+    // No config here on purpose: this exercises the shipped defaults, not a
+    // user override. The config must live in the temp HOME this test sets
+    // *before* setup runs: setup resolves the config dir from HOME, so a
+    // config written anywhere else is silently ignored.
     const harness = await runV2PluginSetup({
       directory: testRoot,
-      config: {
-        agentMode: "unified",
-        agents: {
-          "zetta": {
-            autoLoadSkills: ["parallel-exploration"]
-          },
-          "forager-worker": {
-            autoLoadSkills: ["test-driven-development", "verification-before-completion"]
-          }
-        },
-      },
+      config: { agentMode: "unified" },
     });
     // Was V1 hooks.config(...) -> V2 generated agent definitions
     const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
-    // Skills are referenced via hive_skill("...") - on-demand loading
+    // zetta still knows the skill exists, because its prompt routes fan-out
+    // work through hive_skill(). What it no longer does is carry the whole
+    // body on every turn of a session that can run hundreds of them.
     const hiveMasterPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(hiveMasterPrompt).toBeDefined();
-    // Check for skill reference (on-demand) not full template embedding
     expect(hiveMasterPrompt).toContain(`\`hive_skill("parallel-exploration")\``);
+
+    const parallelExploration = BUILTIN_SKILLS.find(s => s.name === "parallel-exploration");
+    expect(parallelExploration).toBeDefined();
+    expect(hiveMasterPrompt).not.toContain(parallelExploration!.template);
 
     // scout-researcher should NOT have parallel-exploration reference
     const scoutPrompt = opencodeConfig.agent["scout-researcher"]?.prompt as string;
     expect(scoutPrompt).toBeDefined();
     expect(scoutPrompt).not.toContain(`\`hive_skill("parallel-exploration")\``);
 
-    // forager-worker should have skill templates embedded (not hive_skill references)
+    // forager-worker is the agent that keeps full templates, because it writes
+    // code in a long session and being told to load TDD mid-task is a step
+    // agents skip.
     const foragerPrompt = opencodeConfig.agent["forager-worker"]?.prompt as string;
     expect(foragerPrompt).toBeDefined();
-    // Builtin skills are embedded as full templates via autoLoadSkills
     expect(foragerPrompt).toContain("# Test-Driven Development (TDD)");
     expect(foragerPrompt).toContain("# Verification Before Completion");
     // forager should NOT have parallel-exploration reference
@@ -263,7 +260,7 @@ describe("config hook autoLoadSkills injection", () => {
       JSON.stringify({
         agentMode: "dedicated",
         agents: {
-          "architect-planner": {
+          "zetta": {
             autoLoadSkills: ["parallel-exploration"]
           }
         },
@@ -271,13 +268,15 @@ describe("config hook autoLoadSkills injection", () => {
     );
 
     const harness = await runV2PluginSetup({ directory: testRoot });
-    // Was V1 hooks.config(...) -> V2 generated agent definitions
+    // Was V1 hooks.config(...) -> V2 agent definitions generated here
     const opencodeConfig: any = { agent: agentPromptProxy(harness) };
 
-    // zetta should have parallel-exploration embedded (full template) in dedicated mode
+    // An explicit autoLoadSkills in the user config still embeds the full
+    // template — that is the documented opt-in, and the reason the defaults
+    // no longer carry one.
     const zettaPrompt = opencodeConfig.agent["zetta"]?.prompt as string;
     expect(zettaPrompt).toBeDefined();
-    
+
     const parallelExplorationSkill = BUILTIN_SKILLS.find(s => s.name === "parallel-exploration");
     expect(parallelExplorationSkill).toBeDefined();
     expect(zettaPrompt).toContain(parallelExplorationSkill!.template);

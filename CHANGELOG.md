@@ -55,6 +55,28 @@ Verified on the real runtime (OpenCode 2.1.4, local build loaded): `hive_skill`
 returned both new skills, and the Operating Behaviours section was present in the
 agent's system prompt. 674 tests pass, `tsc` clean, build ok.
 
+### `zetta` and `architect-planner` no longer auto-load `parallel-exploration`
+
+Both are planners: they write plans and dispatch work, and fan-out research is the
+orchestrator's move. Carrying a 1,120-word skill body in their prompt meant paying
+it on every turn of sessions that run into the hundreds, for a skill read perhaps
+once. Both prompts already route the actual case through
+`hive_skill("parallel-exploration")` (delegation section, skills table, planning
+iron laws), so the guidance still arrives when it is needed.
+
+`forager-worker` keeps its auto-loaded `test-driven-development` and
+`verification-before-completion`: it is the agent that writes code, and an agent
+told to load TDD mid-task is an agent that skips it. An explicit `autoLoadSkills`
+entry in `agent_hive.json` still embeds the full template — that is the opt-in.
+
+One consequence worth knowing: default auto-load used to re-deliver a template
+after the plugin's builtin skill drifted from the embedded copy. That never lasted,
+because `src/skills/skill-content.test.ts` pins the load-bearing sentences.
+
+`config-autoload-skills.test.ts` used to exercise the defaults through a config that
+repeated them, so it would have passed either way; it now asserts the shipped
+defaults directly, and the explicit-override case got its own config.
+
 ### Dependencies
 
 - Nâng `simple-git` 3.x → **4.0.2**. Đây là major và nó vỡ một thứ không có test nào bắt được: v4 bỏ việc rải `git` response đã parse lên chính object lỗi, giờ chỉ còn ở `error.git`, và message đổi từ `CONFLICT (content): Merge conflict in a.txt` thành `CONFLICTS: a.txt:content`. Code cũ parse `err.message` tìm chuỗi `"Merge conflict in"` → **danh sách file xung đột thành rỗng**. Merge vẫn fail đúng, repo vẫn được `merge --abort` đúng, nhưng tool `hive_merge` báo "xung đột" mà không nêu file nào — người dùng không biết mở file nào. Giờ đọc `error.git.conflicts[].file` trước, giữ parse message làm dự phòng

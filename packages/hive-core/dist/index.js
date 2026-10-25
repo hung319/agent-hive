@@ -808,12 +808,12 @@ var DEFAULT_HIVE_CONFIG = {
     zetta: {
       temperature: 0.5,
       skills: [],
-      autoLoadSkills: ["parallel-exploration"]
+      autoLoadSkills: []
     },
     "architect-planner": {
       temperature: 0.7,
       skills: [],
-      autoLoadSkills: ["parallel-exploration"]
+      autoLoadSkills: []
     },
     "swarm-orchestrator": {
       temperature: 0.5,
