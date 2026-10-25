@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Skills and agent behaviour from an 8-source study
+
+Read and compared eight agent-prompt projects (addyosmani/agent-skills,
+Leonxlnx/taste-skill, thedotmack/claude-mem, JuliusBrussee/caveman,
+x1xhlol/system-prompts, dair-ai/Prompt-Engineering-Guide, Panniantong/Agent-Reach,
+Shubhamsaboo/awesome-llm-apps). Three of them had nothing Hive needed — Agent-Reach
+is a network bridge, awesome-llm-apps is an app catalogue, and the system-prompt
+collection confirmed existing behaviour rather than correcting it. Adopted:
+
+- **Operating behaviours in the system prompt.** Six rules that apply to every
+  agent in every phase: state the assumption instead of carrying it, name a
+  contradiction instead of resolving it quietly, disagree when the specific cost is
+  concrete, prefer the boring solution, touch only what the task needs, and claim
+  nothing you did not see. Previously only `zetta` and `forager` had any of this,
+  and `architect` and `scout` had none.
+- **Adversarial review before a consequential merge (`swarm`).** Before merging a
+  task that touches auth, data shape, or an external contract, a fresh subagent gets
+  the diff and the contract — **never the orchestrator's conclusion**, because a
+  reviewer told what to think returns agreement. Findings are classified before
+  acting, and the check is skipped for mechanical work.
+- **`context-map-window` skill** (new). Map-first reading (`code_search` →
+  `look_at` → `read` with a range), keeping the decisive line out of a 3000-line log,
+  and a growth check before appending to a prompt or skill. This exists because
+  `autoLoadSkills` injects a skill's whole body into every turn — the 18 skills are
+  ~24k tokens in total.
+- **`source-driven-development` skill** (new). Verify an API against `context7_query-docs`,
+  the installed `.d.ts`, or real usage before writing against it; record where you
+  checked; label anything unverified as unverified. Its upgrade section is the lesson
+  from this same release: `simple-git` 4 changed `merge` error shapes and no test
+  noticed, because a green suite only proves what it covers.
+- **Memory discipline (`executing-plans`).** Rules that changed how you work are
+  written as `feedback` with **Why** and **How to apply**; repo facts as `project`
+  with a date; and nothing the user has not seen gets written, because tomorrow it is
+  quoted back as agreed.
+- **`caveman` rewritten** (591 → ~95 lines). It now carries the upstream project's
+  honest measurement — about 3% output reduction against "answer concisely", not a
+  token strategy — plus the rules the old copy lacked: it stays on until switched
+  off, a dropped negation costs more than every word it saves, and it breaks into
+  full sentences for security warnings, irreversible actions, and questions.
+- **Two-reviewer verdict (`code-reviewer`).** A blocking finding is settled by a
+  second review in a fresh conversation that is not told the first verdict; on
+  disagreement the **higher severity holds** until a written ruling lowers it, and
+  the disagreement is recorded rather than resolved by silence.
+
+Verified on the real runtime (OpenCode 2.1.4, local build loaded): `hive_skill`
+returned both new skills, and the Operating Behaviours section was present in the
+agent's system prompt. 674 tests pass, `tsc` clean, build ok.
+
 ### Dependencies
 
 - Nâng `simple-git` 3.x → **4.0.2**. Đây là major và nó vỡ một thứ không có test nào bắt được: v4 bỏ việc rải `git` response đã parse lên chính object lỗi, giờ chỉ còn ở `error.git`, và message đổi từ `CONFLICT (content): Merge conflict in a.txt` thành `CONFLICTS: a.txt:content`. Code cũ parse `err.message` tìm chuỗi `"Merge conflict in"` → **danh sách file xung đột thành rỗng**. Merge vẫn fail đúng, repo vẫn được `merge --abort` đúng, nhưng tool `hive_merge` báo "xung đột" mà không nêu file nào — người dùng không biết mở file nào. Giờ đọc `error.git.conflicts[].file` trước, giữ parse message làm dự phòng

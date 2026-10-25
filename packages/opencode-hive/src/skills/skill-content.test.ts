@@ -34,7 +34,7 @@ describe('skill content', () => {
       'dispatching-parallel-agents', 'parallel-exploration', 'code-reviewer',
       'receiving-code-review', 'verification-before-completion',
       'finishing-a-development-branch', 'docker-mastery', 'agents-md-mastery',
-      'skill-creator', 'caveman',
+      'skill-creator', 'caveman', 'context-map-window', 'source-driven-development',
     ];
 
     // A map that names a skill the registry does not have sends the agent to
@@ -64,6 +64,61 @@ describe('skill content', () => {
     const skill = BUILTIN_SKILLS.find((entry) => entry.name === 'finishing-a-development-branch');
     expect(skill).toBeDefined();
     expect(skill!.template).toContain('The menu comes after a\ngreen suite');
+  });
+
+  it('makes the doubt review adversarial and withholds the author conclusion', () => {
+    const swarm = fs.readFileSync(path.resolve(import.meta.dir, '..', '..', 'src', 'agents', 'swarm.ts'), 'utf-8');
+
+    // A reviewer handed the author's conclusion returns agreement, not review.
+    expect(swarm).toContain('Pass ARTIFACT and CONTRACT only');
+    expect(swarm).toContain('Do NOT validate');
+    // And a rule with no escape hatch gets applied to renames and docs.
+    expect(swarm).toContain('Skip it');
+  });
+
+  it('settles a two-reviewer disagreement in favour of the higher severity', () => {
+    const skill = BUILTIN_SKILLS.find((entry) => entry.name === 'code-reviewer');
+    expect(skill).toBeDefined();
+    expect(skill!.template).toContain('Two Reviewers, One Verdict');
+    expect(skill!.template).toContain('Keep the **higher** severity');
+    expect(skill!.template).toContain('Do not tell the second reviewer what the first one concluded');
+  });
+
+  it('tells a reader to take the map before the body', () => {
+    const skill = BUILTIN_SKILLS.find((entry) => entry.name === 'context-map-window');
+    expect(skill).toBeDefined();
+    expect(skill!.template).toContain('code_search');
+    expect(skill!.template).toContain('look_at');
+    // The growth check is the half that protects the system prompt.
+    expect(skill!.template).toContain('would removing this line make an agent');
+  });
+
+  it('requires an unverified API call to be labelled as one', () => {
+    const skill = BUILTIN_SKILLS.find((entry) => entry.name === 'source-driven-development');
+    expect(skill).toBeDefined();
+    expect(skill!.template).toContain('context7_query-docs');
+    expect(skill!.template).toContain('Unverified:');
+    // The upgrade lesson: a green suite does not prove a major bump was safe.
+    expect(skill!.template).toContain('A green suite is not evidence that a major upgrade was safe');
+  });
+
+  it('states the measured gain of caveman instead of implying a token saving', () => {
+    const skill = BUILTIN_SKILLS.find((entry) => entry.name === 'caveman');
+    expect(skill).toBeDefined();
+    expect(skill!.template).toContain('3%');
+    // The safety list is what the old copy lacked.
+    expect(skill!.template).toContain('Never drop not/never/no/only');
+    expect(skill!.template).toContain('Irreversible action');
+    expect(skill!.template).toContain('Do not switch it on by yourself');
+  });
+
+  it('separates rule from log when writing memory', () => {
+    const skill = BUILTIN_SKILLS.find((entry) => entry.name === 'executing-plans');
+    expect(skill).toBeDefined();
+    expect(skill!.template).toContain('What To Remember Afterwards');
+    expect(skill!.template).toContain('How to apply:');
+    // Recorded as agreed what the user has not seen becomes false authority.
+    expect(skill!.template).toContain('guess wearing a memory');
   });
 
   it('gives every builtin skill a description that names its trigger', () => {

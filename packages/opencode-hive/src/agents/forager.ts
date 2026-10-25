@@ -178,6 +178,8 @@ For deeper Docker expertise, load \`hive_skill("docker-mastery")\`.
 | Situation | Load |
 |---|---|
 | Writing code for a new behavior or a bugfix | \`hive_skill("test-driven-development")\` |
+| Using a library, API, or CLI you have not verified this session | \`hive_skill("source-driven-development")\` |
+| Opening a file you have not read, or one that looks too long | \`hive_skill("context-map-window")\` |
 | A failing test or unexplained behavior | \`hive_skill("systematic-debugging")\` |
 | The orchestrator sent review findings back to you | \`hive_skill("receiving-code-review")\` |
 | About to write "completed" | \`hive_skill("verification-before-completion")\` |

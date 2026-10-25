@@ -159,3 +159,36 @@ After all tasks complete and verified:
 | "The batch was small, skip the review" | Small batches are where an unverified assumption ships. |
 | "The finding is minor, I'll come back to it" | Say so in the ledger, or it is gone. |
 | "I should check in before the next batch" | The plan is approved. Work, or name a real blocker. |
+
+## What To Remember Afterwards
+
+The ledger is for this feature. Memory is for the next one, and it is the only
+place a later session can find what you learned. But a memory is a tax on
+every future session — it is read every time — so write few and write well.
+
+**Write, at the point you learned it (not at the end of the feature):**
+
+- **A rule that changed how you work**, as `feedback`:
+  `hive_memory_set({ scope: "project", label: "feedback", value: "Convention: <the rule>. Why: <what broke when you did not>. How to apply: <where it bites>." })`
+  The `Why` is the part that survives; a rule with no reason gets overridden
+  by the next session that finds it inconvenient.
+- **A durable fact about this repo**, as `project`: a command that misleads, a
+  file never to touch, an external system's quirk. Include the date — a fact
+  without one cannot be judged stale later.
+
+**Do not write:**
+
+- Anything you decided in this session that the user has not seen. That is a
+  guess wearing a memory's clothes, and tomorrow it will be quoted back to you
+  as if it were agreed.
+- A log of what you did. `git log` already has it, in more detail.
+- A restatement of the plan. The plan file already has it.
+- Anything you could re-derive in ten seconds by reading the code.
+
+**Before writing, check for the existing entry** (`hive_memory_recall`). An
+updated memory is worth more than a second one that half-contradicts it —
+two entries saying similar things in different words is how a memory block
+starts lying.
+
+When done, `hive_memory_set({ scope: "project", label: "project", value })`
+for the feature's status line, so the next session knows where work stands.

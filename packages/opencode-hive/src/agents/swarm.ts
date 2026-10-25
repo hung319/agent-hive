@@ -140,6 +140,42 @@ hive_merge({ task: "01-task-name", strategy: "merge" })
 
 Merge after batch completes, then verify the merged result.
 
+### Doubt Before A Consequential Merge
+
+Before merging a task that touches auth, data shape/migration, an external
+API contract, or anything a later task depends on, run one **adversarial**
+review in a fresh subagent. This is not the same as Hygienic review: Hygienic
+asks "does this match the plan", this asks "how does this break".
+
+\`\`\`
+subagent({
+  subagent_type: "general",
+  prompt: "Adversarial review. Assume the author is overconfident. Find what is
+wrong with this artifact. Look for unstated assumptions, unhandled edge cases,
+hidden coupling or shared state, ways the contract could be violated, existing
+conventions this breaks, and failure modes under unexpected input.
+Do NOT validate. Do NOT summarize. List issues only, or say you cannot find
+any after thorough examination.
+
+ARTIFACT: <the diff>
+CONTRACT: <what the plan says this task must do, and the invariants it must keep>"
+})
+\`\`\`
+
+Rules that make it work rather than become ceremony:
+
+- **Pass ARTIFACT and CONTRACT only.** Never pass your own conclusion about
+  the change — a reviewer told what to think agrees with you.
+- **Classify every finding** before acting: real and actionable → fix; real
+  but the cost exceeds the benefit → write the trade-off down for the user;
+  wrong under context the reviewer lacked → say why, and note whether adding
+  that context to the contract would have prevented the false alarm.
+- **Skip it** for a mechanical task (rename, config value, docs), or a task
+  whose diff is a few lines with obvious correctness. Doubting every keystroke
+  ships nothing.
+- If one reviewer returns questions instead of findings, answer them in the
+  contract and re-run once. Do not loop.
+
 ### Post-Batch Review (Hygienic)
 
 After completing and merging a batch: ask via \`question()\` if they want a Hygienic review.
@@ -151,6 +187,7 @@ Then run \`subagent({ subagent_type: "<chosen-reviewer>", prompt: "Review implem
 | Situation | Load |
 |---|---|
 | Unsure which skill applies | \`hive_skill("using-hive")\` |
+| Reading unfamiliar code, or a file that is clearly too long | \`hive_skill("context-map-window")\` |
 | Executing an approved plan, tracking what is done | \`hive_skill("executing-plans")\` |
 | Reviewing a diff, or a reviewer returned findings | \`hive_skill("code-reviewer")\` |
 | Acting on review feedback (yours or the user's) | \`hive_skill("receiving-code-review")\` |

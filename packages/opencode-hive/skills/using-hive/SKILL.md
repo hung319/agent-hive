@@ -43,6 +43,8 @@ skill that applies is usually `brainstorming`, not "ask a quick question".
 | Merging, opening a PR, or deciding what happens to a finished branch | `finishing-a-development-branch` |
 | Containers, Dockerfiles, compose, or container debugging | `docker-mastery` |
 | Writing or updating AGENTS.md | `agents-md-mastery` |
+| Reading unfamiliar code, or a file that is clearly too long | `context-map-window` |
+| Using a library, API, or CLI whose behaviour you have not read this session | `source-driven-development` |
 | Creating or editing a skill | `skill-creator` |
 | Response should be shorter without losing code accuracy | `caveman` |
 

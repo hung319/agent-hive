@@ -258,6 +258,35 @@ task stalls for a day.
 **Never fix findings in the orchestrator session.** Coordination context stays
 clean, and an unfixed-by-anyone-recognized fix skips review.
 
+### Two Reviewers, One Verdict
+
+A single verdict is one sample, and a single sample moves with the phrasing
+of the review prompt. When a finding is severe enough to block a merge
+(a Critical, or a Major you were about to overrule), do not decide it on one
+read:
+
+- Run the second review in a **separate subagent conversation** — a fresh
+  context, not a resumed one. Same artifact, same plan, same contract.
+- **Do not tell the second reviewer what the first one concluded.** Giving it
+  a verdict to agree with is how you get an echo, not a second opinion.
+- Then reconcile:
+
+| Second review says | What you do |
+|---|---|
+| Same finding, same severity | Settled. Fix it. |
+| Same finding, lower severity | Keep the **higher** severity until a written ruling lowers it. |
+| Finding the first missed | It is real until disproved. Review it, then act. |
+| First finding not reproduced | Not dismissed. Re-read the artifact against it and rule in writing — the fact that one reviewer missed it is information, not an acquittal. |
+
+Record the two verdicts and your ruling together, e.g. `task 03: reviewer A
+Major (race), reviewer B Minor (same race); held Major — see ruling`. A
+disagreement that leaves no trace is the same failure as a finding nobody saw.
+
+**When one read is enough:** everything Minor, anything mechanical (a rename
+that did not apply, a missing export), and a second review costs more than
+the finding. The point is to stop severities from being decided by noise, not
+to double every review.
+
 ## Do Not Pre-Judge
 
 When briefing a reviewer or an implementer about findings:

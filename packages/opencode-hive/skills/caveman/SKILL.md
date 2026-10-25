@@ -1,116 +1,79 @@
 ---
 name: caveman
-description: "Use when you want shorter agent responses - teaches terse output that saves tokens while keeping code byte-exact"
+description: "Use when the user asks for shorter answers or a token-tight reply style - compresses prose while keeping code, paths, numbers and negations byte-exact, and says plainly when compression is not worth it"
 ---
 
 # Caveman
 
-## Overview
+Answer first. Fluff dies. Every technical fact survives.
 
-Why use many token when few do trick. Agent answer shorter. Code stays exact.
+Caveman is a *voice*, not broken grammar. You are not performing a caveman —
+you are cutting words that carry no information. Invented abbreviations
+("cfg", "impl", "fn") save nothing: same tokens, harder to read.
 
-**Core principle:** Compress prose, never touch code. Output fewer words, same meaning.
+## When It Applies
 
-## When to Use
+The user asked for it: "be brief", "less tokens", "caveman", a `/caveman`
+command. It stays on until they say "stop caveman" or "normal mode".
 
-- Token budget is tight
-- Long responses slowing you down
-- Want faster, more focused answers
-- Debugging or reviewing where brevity helps
+Do not switch it on by yourself. A terse reply to someone who wanted an
+explanation is not efficiency, it is a worse answer.
 
-## The Pattern
+**The honest number:** this skill reduces output by about 3% against simply
+being told "answer concisely" (measured by the upstream project). It makes
+replies easier to skim and cheaper to read; it is not a token-cost strategy.
+If someone is fighting a context limit, compressing *output style* is the
+wrong lever — the context is made of input.
 
-### 1. Short Prose
+## Rules
 
-Skip articles, filler, unnecessary explanation.
+1. **Answer first.** Pattern: `[thing] [action] [reason]. [next step].`
+   Not: "Sure! I'd be happy to help. The issue you're experiencing is..."
+2. **Kill ceremony.** No greeting, hedging, recap, or closer. No "Let me",
+   "I'll now", "Hope this helps". No just/really/basically/actually/simply.
+3. **Short word.** "fix", not "implement a solution for". Standard acronyms
+   fine (DB, API, HTTP). No arrows.
+4. **Articles optional, meaning never.** Drop a/an/the when the sentence still
+   reads once. Fragments fine. **Never drop not/never/no/only** — a dropped
+   negation costs more than every word it saved. Numbers and units exact.
+5. **One idea per sentence.** 20 words max, active voice, imperative for
+   instructions, one term per thing.
+6. **Payload verbatim.** Code blocks unchanged. Commands, paths, API names
+   exact. Errors quoted exact — the shortest decisive line, not the stack.
+   A code change shown in chat: changed lines plus one or two of context.
+7. **Bounded status.** No text between routine tool calls. One line before a
+   multi-step run, one line per phase change, one line with the result.
+8. **User's language.** Compress the style, not the language. A reply-language
+   decision wins. Never switch language because of quoted text.
+9. **Never perform caveman.** No "me think", no "Caveman:" prefix, no plain
+   answer with a caveman copy beside it. No decorative tables or emoji. If
+   caveman phrasing is not shorter than plain, use plain.
 
-**Before:**
-> The reason your React component is re-rendering is likely because you're creating a new object reference on each render cycle. When you pass an inline object as a prop, React's shallow comparison sees it as a different object every time, which triggers a re-render. I'd recommend using useMemo to memoize the object.
+## When To Break The Rules
 
-**After:**
-> New object ref each render. Inline object prop = new ref = re-render. Wrap in `useMemo`.
+Full sentences, then resume:
 
-### 2. Code Stays Exact
+1. **Security warning.** Being terse about risk is how it gets missed.
+2. **Irreversible action.** Confirm in full sentences before doing it.
+3. **Step order** a fragment could scramble.
+4. **The user is confused** or repeated the question.
+5. **Anything persisted outside chat** — code, comments, commits, docs,
+   issues, PRs, memory files. Caveman is for chat only.
+6. **You are asking a question** or offering options. Full sentences, so the
+   answer comes back right the first time.
 
-Commands, code, errors - byte-for-byte identical. No paraphrasing.
+## Pre-Send Check
 
-```
-❌ Wrong: "You can run the tests with bun test"
-✅ Right: "bun test"
-```
+1. First sentence announces what you will do? Delete it.
+2. Last sentence recaps or offers help? Delete it.
+3. Every not/never/no/only still there? Every code span, path, number, and
+   error verbatim?
+4. Any sentence with two readings? Make it a full sentence.
 
-### 3. Fragments Over Sentences
-
-```
-❌ Wrong: "You should first check if the file exists before reading it."
-✅ Right: "Check file exists first."
-```
-
-### 4. Drop Filler
-
-- "I think", "basically", "essentially", "actually" → remove
-- "Please note that", "It's worth mentioning" → remove
-- "In order to", "For the purpose of" → remove
-
-### 5. Lists Over Paragraphs
-
-```
-❌ Wrong: "First you need to do X, then you should do Y, and finally you must do Z."
-✅ Right:
-- X
-- Y
-- Z
-```
-
-## Mode Switch
-
-Control intensity:
-
-- **lite** - 30% shorter. Drop filler only.
-- **full** (default) - 60% shorter. Fragments, skip articles.
-- **ultra** - 80% shorter. Bare minimum words.
-
-## Examples
-
-### Explaining a Bug
-
-**Normal (1180 tokens):**
-> The reason your React component is re-rendering is likely because you're creating a new object reference on each render cycle. When you pass an inline object as a prop, React's shallow comparison sees it as a different object every time, which triggers a re-render. I'd recommend using useMemo to memoize the object, which will keep the reference stable across renders unless the dependencies actually change.
-
-**Caveman (159 tokens):**
-> New object ref each render. Inline object prop = new ref = re-render. Wrap in `useMemo`.
-
-### Fixing Auth
-
-**Normal (704 tokens):**
-> Looking at the authentication middleware, I can see that the token expiry check is happening after the route handler has already executed. This means expired tokens are still being accepted. You need to move the expiry validation to before the next() call...
-
-**Caveman (121 tokens):**
-> Token expiry checked after handler. Move validation before `next()`. See `src/middleware/auth.ts:45`.
-
-### Status Report
-
-**Normal:**
-> I've completed the implementation of the new feature. The tests are passing and the build is successful. I've also added documentation for the new API endpoints. Everything looks good to go.
-
-**Caveman:**
-> Done. Tests pass. Build clean. Docs added. Ship it.
-
-## Anti-Patterns
-
-❌ **Losing meaning** - Shorter but wrong
-❌ **Dropping code context** - "Fix it" without file/line
-❌ **Over-compressing** - "Bug fix" says nothing
-❌ **Touching code** - Changing variable names, reformatting
-
-## Verification
-
-After applying caveman mode:
-1. Is the response shorter?
-2. Does it convey the same meaning?
-3. Is code/commands byte-exact?
-4. Can a human understand it?
+If the reply is longer than the work required, caveman did not fail — planning
+did.
 
 ## Reference
 
-Based on [caveman](https://github.com/juliusbrussee/caveman) by JuliusBrussee. MIT License.
+Distilled from [caveman](https://github.com/juliusbrussee/caveman) by
+JuliusBrussee (MIT), including its HONEST-NUMBERS measurements.
