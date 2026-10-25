@@ -35,12 +35,12 @@
     "test": "bun test"
   },
   "dependencies": {
-    "simple-git": "^3.27.0"
+    "simple-git": "^4.0.2"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.0",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "@types/bun": "^1.4.4",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
   },
   "files": [
     "dist/",

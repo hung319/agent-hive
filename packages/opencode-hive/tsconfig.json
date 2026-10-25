@@ -6,6 +6,7 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "outDir": "dist",
+    "rootDir": "./src",
     "lib": ["ES2022"],
     "sourceMap": false,
     "strict": false,
@@ -13,7 +14,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": ["node", "bun"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.js", "src/e2e"]

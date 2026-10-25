@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import simpleGit, { SimpleGit } from "simple-git";
+import { simpleGit } from "simple-git";
+import type { SimpleGit } from "simple-git";
 
 export interface WorktreeInfo {
   path: string;
@@ -581,7 +582,7 @@ export class WorktreeService {
           success: false,
           merged: false,
           error: "Merge conflicts detected",
-          conflicts: this.parseConflictsFromError(err.message || ""),
+          conflicts: this.parseConflictsFromError(error),
         };
       }
 
@@ -609,7 +610,26 @@ export class WorktreeService {
     }
   }
 
-  private parseConflictsFromError(errorMessage: string): string[] {
+  /**
+   * Files git reported as conflicting in a failed operation.
+   *
+   * simple-git 4 stopped spreading the parsed git response onto the error: the
+   * structured `{conflicts:[{file,reason}], merges:[...]}` now lives only on
+   * `error.git`, and the message reads `CONFLICTS: a.txt:content`. simple-git 3
+   * put the humanized lines (`Merge conflict in a.txt`) in the message, so the
+   * old message parse returned [] under v4 — a caller waiting on that list saw
+   * "conflicts detected" with no file names. Read the structured shape first and
+   * keep the message parse as a fallback for GitError shapes we don't control.
+   */
+  private parseConflictsFromError(error: unknown): string[] {
+    const structured = (error as { git?: { conflicts?: Array<{ file?: string }>; merges?: string[] } } | null)?.git;
+    const fromResponse = (structured?.conflicts ?? [])
+      .map((entry) => entry?.file)
+      .filter((file): file is string => typeof file === "string" && file.length > 0);
+    if (fromResponse.length > 0) return [...new Set(fromResponse)];
+    if (structured?.merges?.length) return [...new Set(structured.merges)];
+
+    const errorMessage = (error as { message?: string } | null)?.message ?? "";
     const conflicts: string[] = [];
     const lines = errorMessage.split("\n");
     for (const line of lines) {

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Dependencies
+
+- Nâng `simple-git` 3.x → **4.0.2**. Đây là major và nó vỡ một thứ không có test nào bắt được: v4 bỏ việc rải `git` response đã parse lên chính object lỗi, giờ chỉ còn ở `error.git`, và message đổi từ `CONFLICT (content): Merge conflict in a.txt` thành `CONFLICTS: a.txt:content`. Code cũ parse `err.message` tìm chuỗi `"Merge conflict in"` → **danh sách file xung đột thành rỗng**. Merge vẫn fail đúng, repo vẫn được `merge --abort` đúng, nhưng tool `hive_merge` báo "xung đột" mà không nêu file nào — người dùng không biết mở file nào. Giờ đọc `error.git.conflicts[].file` trước, giữ parse message làm dự phòng
+- Thêm `src/services/worktreeService.test.ts` — **5 test chạy git thật** trong repo tạm: xung đột có nêu tên file, repo không bị bỏ lại giữa lúc merge (`status` sạch, không còn `MERGE_HEAD`), merge sạch tạo merge commit, worktree tạo đúng branch và commit được, patch export/apply đi đúng đường. Trước đó `WorktreeService` không có test nào
+- Nâng `@ast-grep/napi` 0.44 → **0.51**, `zod` 4.1 → **4.6**, `@colbymchenry/codegraph` 1.5.0 → **1.6.2**
+- Major của `simple-git` còn lọc biến môi trường `GIT_*` trước khi truyền xuống tiến trình git. Hive chỉ truyền `baseDir` và không dùng `.env()`/`.customBinary()`, nên không cần `allowEnvironment` hay `unsafe` nào
+- **TypeScript 5.9 → 7.0.2** (bản native). Hai chỗ phải sửa:
+  - `packages/opencode-hive/tsconfig.json` thiếu `rootDir`; TS 7 từ chối đoán thư mục nguồn chung (`TS5011`) thay vì làm liều như TS 5.
+  - TS 7 không tự nạp `@types/*` nữa (`--types` có mặc định mới, và `typeRoots` trỏ đúng thư mục cũng không ăn). Thêm `"types": ["node", "bun"]` vào cả hai tsconfig — danh sách này khớp đúng hai package `@types` đang cài.
+- Nâng `@types/node` 20 → **26.6.5**, `@types/bun` → **1.4.4**, `@opencode/plugin` / `@opencode/client` → **2.1.4**
+- `bun.lock` gọn lại: 120 package resolve lại thay vì 290
+
 ## [2.1.0] - 2026-10-25
 
 ### Skills & agents upgraded from obra/superpowers
