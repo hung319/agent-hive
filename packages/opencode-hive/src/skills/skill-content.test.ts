@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'bun:test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { BUILTIN_SKILLS } from './registry.generated.js';
 
 describe('skill content', () => {
@@ -62,5 +64,40 @@ describe('skill content', () => {
     const skill = BUILTIN_SKILLS.find((entry) => entry.name === 'finishing-a-development-branch');
     expect(skill).toBeDefined();
     expect(skill!.template).toContain('The menu comes after a\ngreen suite');
+  });
+
+  it('gives every builtin skill a description that names its trigger', () => {
+    // The description is what an agent sees in available_skills; the body is
+    // invisible until it loads. A description that does not start with a
+    // trigger sentence, or that is a raw YAML marker, is a skill that cannot
+    // be selected. `ponytail` shipped with the description "|" exactly this way.
+    const bad = BUILTIN_SKILLS.filter(
+      (skill) => skill.description.trim().length < 20 || !/^Use (when|before|after|during)\b/.test(skill.description),
+    ).map((skill) => `${skill.name}: ${JSON.stringify(skill.description.slice(0, 40))}`);
+
+    expect(bad).toEqual([]);
+  });
+
+  it('never lets an agent prompt name a skill that does not exist', () => {
+    // A prompt sending the agent to hive_skill("x") for a missing x produces a
+    // failed tool call, which reads to the agent as "no guidance exists".
+    const known = new Set(BUILTIN_SKILLS.map((entry) => entry.name));
+    const promptsDir = path.resolve(import.meta.dir, '..', '..', 'src', 'agents');
+    const referenced: Array<{ file: string; name: string }> = [];
+
+    for (const file of fs.readdirSync(promptsDir)) {
+      if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue;
+      const source = fs.readFileSync(path.join(promptsDir, file), 'utf-8');
+      for (const match of source.matchAll(/hive_skill\(\\?"([a-z0-9-]+)\\?"\)/g)) {
+        referenced.push({ file, name: match[1]! });
+      }
+    }
+
+    const missing = referenced
+      .filter((entry) => !known.has(entry.name))
+      .map((entry) => `${entry.file} -> ${entry.name}`);
+
+    expect(referenced.length).toBeGreaterThan(10);
+    expect(missing).toEqual([]);
   });
 });

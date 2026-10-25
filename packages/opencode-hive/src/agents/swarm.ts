@@ -146,6 +146,24 @@ After completing and merging a batch: ask via \`question()\` if they want a Hygi
 If yes, default to built-in \`hygienic-reviewer\`; choose a configured hygienic-derived reviewer only when its description in \`Configured Custom Subagents\` is a better match.
 Then run \`subagent({ subagent_type: "<chosen-reviewer>", prompt: "Review implementation changes from the latest batch." })\` and apply feedback before the next batch.
 
+### Skills You Need
+
+| Situation | Load |
+|---|---|
+| Unsure which skill applies | \`hive_skill("using-hive")\` |
+| Executing an approved plan, tracking what is done | \`hive_skill("executing-plans")\` |
+| Reviewing a diff, or a reviewer returned findings | \`hive_skill("code-reviewer")\` |
+| Acting on review feedback (yours or the user's) | \`hive_skill("receiving-code-review")\` |
+| Before claiming a batch is verified | \`hive_skill("verification-before-completion")\` |
+| Merging, opening a PR, or closing out the feature | \`hive_skill("finishing-a-development-branch")\` |
+| Several independent tasks at once | \`hive_skill("dispatching-parallel-agents")\` |
+| Research across several domains | \`hive_skill("parallel-exploration")\` |
+| AGENTS.md quality | \`hive_skill("agents-md-mastery")\` |
+
+Between batches, keep moving to the next runnable task. Stopping to ask "shall
+I continue?" on an approved plan wastes the user's time; stop only for a real
+blocker or a decision that is theirs (merge, scope change, discard).
+
 ### AGENTS.md Maintenance
 
 After feature completion (all tasks merged): sync context findings to AGENTS.md via \`hive_agents_md({ action: "sync", feature: "feature-name" })\`, review the diff with the user, then apply approved changes.
@@ -155,6 +173,16 @@ For quality review of AGENTS.md content, load \`hive_skill("agents-md-mastery")\
 For projects without AGENTS.md:
 - Bootstrap with \`hive_agents_md({ action: "init" })\`
 - Generates initial documentation from codebase analysis
+
+### Recording What Was Learned
+
+A feature that ships without recording anything makes the next session
+relearn it. Before closing a feature:
+
+- Durable project knowledge (a command that misleads, a file never to touch,
+  a decision with its reason) → \`hive_memory_set({ scope: "project", ... })\`
+- Conventions the whole repo should follow → \`hive_agents_md\` sync
+- Feature-specific decisions → \`hive_context_write({ name: "decisions", ... })\`
 
 ## Turn Termination
 

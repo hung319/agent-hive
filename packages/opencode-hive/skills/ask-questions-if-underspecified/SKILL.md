@@ -1,12 +1,6 @@
 ---
 name: ask-questions-if-underspecified
-description: Clarify requirements before implementing. Use when serious doubts arise.
-use_when: >
-  When a request has multiple plausible interpretations or key details
-  (objective, scope, constraints, environment, or safety) are unclear,
-  load this skill before starting implementation.
-  Do NOT use when the request is already clear or when a quick, low-risk
-  discovery read can answer the missing details.
+description: Use when a request has multiple plausible readings, or a key detail (objective, scope, constraints, environment, safety) is unclear - asks the few questions that eliminate whole branches of work before any code is written
 ---
 
 # Ask Questions If Underspecified

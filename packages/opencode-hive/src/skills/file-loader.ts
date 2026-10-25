@@ -54,6 +54,45 @@ function stripQuotes(value: string): string {
 }
 
 /**
+ * Read one frontmatter key, including YAML block scalars.
+ *
+ * `description: |` followed by indented lines is valid YAML. Reading only the
+ * key's own line returned the literal string "|", so a user skill written that
+ * way had no usable description. A description is a one-line summary, so block
+ * content is folded into a single line here.
+ */
+function readFrontmatterKey(frontmatter: string, key: string): string | null {
+  const lines = frontmatter.split(/\r?\n/);
+  const start = lines.findIndex((line) => new RegExp(`^${key}:`).test(line));
+  if (start === -1) return null;
+
+  const firstValue = lines[start].slice(key.length + 1).trim();
+  const blockMatch = firstValue.match(/^([|>])[+-]?$/);
+
+  if (!blockMatch) return stripQuotes(firstValue);
+
+  const collected: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === '') {
+      collected.push('');
+      continue;
+    }
+    if (!/^\s/.test(line)) break;
+    collected.push(line);
+  }
+
+  const nonEmpty = collected.filter((line) => line.trim() !== '');
+  const indent = nonEmpty.length
+    ? Math.min(...nonEmpty.map((line) => line.length - line.trimStart().length))
+    : 0;
+
+  const dedented = collected.map((line) => line.slice(indent));
+  const joined = blockMatch[1] === '|' ? dedented.join('\n') : dedented.join(' ');
+  return joined.trim().replace(/\s*\n\s*/g, ' ');
+}
+
+/**
  * Parse YAML frontmatter from skill file content.
  *
  * @param content - The file content
@@ -66,17 +105,14 @@ function parseFrontmatter(content: string): { name: string; description: string;
   const frontmatter = match[1];
   const body = match[2];
 
-  const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-  const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
+  const name = readFrontmatterKey(frontmatter, 'name');
+  const description = readFrontmatterKey(frontmatter, 'description');
 
-  if (!nameMatch || !descMatch) return null;
+  if (!name || !description) return null;
 
-  return {
-    name: stripQuotes(nameMatch[1]),
-    description: stripQuotes(descMatch[1]),
-    body,
-  };
+  return { name, description, body };
 }
+
 
 /**
  * Get the search paths for a skill ID in priority order.

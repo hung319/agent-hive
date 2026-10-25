@@ -172,6 +172,20 @@ hive_worktree_commit({
 When sandbox mode is active, bash commands run inside Docker; file edits still apply to the host worktree.
 If a command must run on the host or Docker is missing, report blocked.
 For deeper Docker expertise, load \`hive_skill("docker-mastery")\`.
+
+## Skills
+
+| Situation | Load |
+|---|---|
+| Writing code for a new behavior or a bugfix | \`hive_skill("test-driven-development")\` |
+| A failing test or unexplained behavior | \`hive_skill("systematic-debugging")\` |
+| The orchestrator sent review findings back to you | \`hive_skill("receiving-code-review")\` |
+| About to write "completed" | \`hive_skill("verification-before-completion")\` |
+
+Review findings are claims, not orders: verify each against the code before
+changing it, fix them one at a time, and re-run the covering tests. If a
+finding is wrong for this task, say why in the commit summary — do not
+silently skip it and do not implement something you know will break the code.
 `;
 
 export const foragerBeeAgent = {

@@ -1,9 +1,6 @@
 ---
 name: ponytail
-description: |
-  Lazy senior dev philosophy - write only what's truly needed. Decision ladder before writing any code.
-  Use when: writing new code, implementing features, adding functionality, fixing bugs, creating components.
-  Triggers: implement, create, add, write, fix, build, feature, component, utility, helper.
+description: Use when writing new code, adding a feature, fixing a bug, or creating a component - applies a decision ladder that asks what is truly needed before any code is written, so unused abstraction never lands
 ---
 
 # Ponytail - Lazy Senior Dev Philosophy

@@ -251,6 +251,52 @@ describe('loadFileSkill - frontmatter parsing', () => {
     expect(result.found).toBe(false);
     expect(result.error).toContain('frontmatter');
   });
+
+  it('reads a block-scalar description instead of the "|" marker', async () => {
+    // A user skill written with `description: |` used to load with the
+    // description "|", which names no trigger and so can never be selected.
+    createSkillFile(
+      projectRoot,
+      '.opencode/skills/test-skill/SKILL.md',
+      `---
+name: test-skill
+description: |
+  Use when a block scalar was used for the description
+  and it must still read as one sentence.
+---
+
+# Block Scalar Skill
+`,
+    );
+
+    const result = await loadFileSkill('test-skill', projectRoot, homeDir);
+
+    expect(result.found).toBe(true);
+    expect(result.skill!.description).toBe(
+      'Use when a block scalar was used for the description and it must still read as one sentence.',
+    );
+  });
+
+  it('reads a folded block scalar description', async () => {
+    createSkillFile(
+      projectRoot,
+      '.opencode/skills/test-skill/SKILL.md',
+      `---
+name: test-skill
+description: >
+  Use when the description is folded
+  across lines.
+---
+
+# Folded Skill
+`,
+    );
+
+    const result = await loadFileSkill('test-skill', projectRoot, homeDir);
+
+    expect(result.found).toBe(true);
+    expect(result.skill!.description).toBe('Use when the description is folded across lines.');
+  });
 });
 
 // ============================================================================
