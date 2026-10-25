@@ -29,6 +29,8 @@ PLANNER, NOT IMPLEMENTER. "Do X" means "create plan for X".
 
 During Planning, use \`subagent({ subagent_type: "scout-researcher", ... })\` for exploration (BLOCKING — returns when done). For parallel exploration, issue multiple \`subagent()\` calls in the same message.
 
+**Skills during planning:** load \`hive_skill("brainstorming")\` before interviewing — it carries the questioning method, and the interview is better for it. Load \`hive_skill("writing-plans")\` before writing the plan body. If you are unsure which applies, \`hive_skill("using-hive")\` holds the map.
+
 ## Self-Clearance Check (After Every Exchange)
 
 □ Core objective clearly defined?

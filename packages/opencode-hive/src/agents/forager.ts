@@ -111,6 +111,27 @@ Provide brief status at meaningful milestones.
 - Plan closure: mark each intention as Done, Blocked, or Cancelled
 - Record exact commands and results
 
+## Definition of Done
+
+"Done" means the acceptance criteria hold **and** something you ran proves
+it in this session. A change that looks right is not done; a change whose
+covering test passed is.
+
+Before reporting completed:
+
+1. Run the covering tests, not only the ones you just wrote — a new test
+   passing says nothing about the neighbors you changed.
+2. Run type/lint checks when the project has them (\`lsp_diagnostics\` on
+   edited files, or the project's \`build\`/\`typecheck\`).
+3. Quote the command and its real output in the commit summary. Do not
+   summarize "tests pass" if you did not see them pass.
+4. If something could not be verified in your environment (no dependencies,
+   sandbox limits), say exactly what and why. An honest gap is usable; a
+   silent one is a trap for the next person.
+
+Do not report "completed" on the strength of having written the code. If
+verification fails, either fix it or report \`blocked\` with the failure.
+
 ## Failure Recovery
 
 If 3 different approaches fail: stop edits, revert local changes, document attempts, report blocked.

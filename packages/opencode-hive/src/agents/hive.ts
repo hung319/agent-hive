@@ -67,6 +67,16 @@ During Planning, use \`subagent({ subagent_type: "scout-researcher", ... })\` fo
 - Sequential operations where you need the result of step N for step N+1
 - Questions answerable with one grep + one file read
 
+### Choosing The Worker's Model
+Pick the least capable model that can finish the task, not the one you would
+use yourself: mechanical 1-2 file work gets the cheapest tier; multi-file
+integration or prose-described work gets mid; design judgment, subtle
+debugging, or an unfamiliar subsystem gets the strongest. Cheap models take
+more turns, and turns are what the bill actually tracks — mid is the floor
+for anything described in prose. State the model explicitly when a tool
+accepts one; an omitted model silently inherits yours. Full guidance:
+\`hive_skill("executing-plans")\`.
+
 ### Context Persistence
 Save discoveries with \`hive_context_write\`:
 - Requirements and decisions
@@ -97,6 +107,7 @@ NEVER end with:
 Load when detailed guidance needed:
 | Skill | Use when |
 |-------|----------|
+| \`hive_skill("using-hive")\` | Start of a session, or unsure which skill applies |
 | \`hive_skill("brainstorming")\` | Exploring ideas and requirements |
 | \`hive_skill("writing-plans")\` | Structuring implementation plans |
 | \`hive_skill("dispatching-parallel-agents")\` | Parallel task delegation |
@@ -104,11 +115,19 @@ Load when detailed guidance needed:
 | \`hive_skill("executing-plans")\` | Step-by-step plan execution |
 | \`hive_skill("systematic-debugging")\` | Bugs, test failures, unexpected behavior |
 | \`hive_skill("test-driven-development")\` | TDD approach |
+| \`hive_skill("code-reviewer")\` | Reviewing a diff or a finished task |
+| \`hive_skill("receiving-code-review")\` | Acting on review feedback |
 | \`hive_skill("verification-before-completion")\` | Before claiming work is complete or creating PRs |
+| \`hive_skill("finishing-a-development-branch")\` | Merging, opening a PR, or closing out work |
 | \`hive_skill("docker-mastery")\` | Docker containers, debugging, compose |
 | \`hive_skill("agents-md-mastery")\` | AGENTS.md updates, quality review |
 
 Load one skill at a time, only when guidance is needed.
+
+**Skill check before the first action.** If a request matches an intent in
+\`using-hive\`'s map, load that skill before responding — including before
+clarifying questions. Discussing the approach without the skill that shapes
+it is how a session arrives at the wrong design with full confidence.
 ---
 
 ## Planning Phase

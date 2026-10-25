@@ -206,3 +206,88 @@ Use NEEDS_DISCUSSION (instead of REQUEST_CHANGES) when:
 - The plan/task is ambiguous and multiple implementations could be correct
 - The change implies a product/architecture decision not documented
 - Fixing issues requires changing scope, dependencies, or public API
+
+## Two Verdicts, Always
+
+Every review returns both:
+
+1. **Spec compliance** — ✅ or ❌: does the diff do what the task said, with
+   the exact values, names, and formats it named?
+2. **Quality** — approved or changes requested, from the sections above.
+
+A review missing either verdict is not a review. Code that is clean but does
+not match the spec is ❌; code that matches the spec but is unsafe is not
+approved. Report them separately — "looks good" hides which one you checked.
+
+The author's own self-review never replaces this. Two independent passes are
+the point.
+
+## The Fix Loop (For The Orchestrator)
+
+When a review comes back with spec ❌, a Critical/Major finding, or an
+"Uncertain" item the orchestrator confirmed as real, the orchestrator runs a
+bounded loop. This section exists because unbounded review loops are how a
+task stalls for a day.
+
+**Round rules:**
+
+- **Minor findings never enter the loop.** Record them as
+  `Task <id>: minor (deferred): <one-liner>` — in the ledger when a ledger
+  exists, otherwise in the batch report — and let the final review triage
+  them. A roll-up nobody reads is a silent discard.
+- **A finding you are not allowed to dismiss is not a reason to stop.** If a
+  finding is contested or "the plan mandated it", rule on it explicitly and
+  say why; do not silently ignore it, and do not assume the plan wins.
+- **Rounds 1–3: back to the same implementer.** It has the context. Send the
+  open findings verbatim, ask for the covering tests to be re-run, and
+  require the test command and its output in the reply.
+- **Rounds 4–5: a fresh implementer, one model tier up.** A loop that
+  survives three resumes usually means the implementer cannot see its own
+  problem. Fresh eyes plus more capability is the move.
+- **Every round ends with a scoped re-review:** verdict each finding
+  ADDRESSED or NOT ADDRESSED, and flag new breakage introduced by the fix
+  diff only. Out-of-scope observations become deferred minors; they never
+  extend the loop.
+- **Five rounds maximum.** After round 5's re-review, stop dispatching and
+  adjudicate each open finding yourself: park it with a ruling (why the code
+  stands, or why it is real but deferred), or — if a later task builds on it
+  — rule on the smallest change that unblocks it and carry that into the next
+  task. Every ruling is written down. Stop only when every path forward is a
+  guess.
+
+**Never fix findings in the orchestrator session.** Coordination context stays
+clean, and an unfixed-by-anyone-recognized fix skips review.
+
+## Do Not Pre-Judge
+
+When briefing a reviewer or an implementer about findings:
+
+- Never write "do not flag X", "this is at most Minor", "the plan chose this
+  so it's fine", or "don't treat Y as a defect". Each is a pre-judgment that
+  buys the orchestrator a shorter loop at the cost of the review's honesty.
+- If you believe a finding would be a false positive, let it be raised and
+  adjudicate it afterwards with a written ruling.
+- Never ask a reviewer to re-run tests the implementer already ran on the
+  same code; the implementer's report carries that evidence.
+
+## Common Rationalizations
+
+| Excuse | Reality |
+|---|---|
+| "Close enough on spec compliance" | A spec gap is ❌. Fix it, or park it with a written ruling. |
+| "I'll fix it myself, dispatching is overhead" | The orchestrator's fixes skip review and pollute its context. |
+| "One more round will converge" | Past the cap, rounds do not converge; the failure is structural. |
+| "The reviewer will just find something new anyway" | Scoped re-reviews verify fixes; new findings go to the ledger. |
+| "This finding is obviously wrong, I'll drop it" | You may rule on it. You may not silently discard it. |
+| "The fix was small, skip the re-review" | Unreviewed fixes are how regressions land. |
+| "Reviews slow the loop down" | The loop without reviews is unverified churn. |
+
+## Verification
+
+This review is complete when:
+
+- [ ] Both verdicts (spec, quality) are stated
+- [ ] Every finding has a file:line and a recommended action
+- [ ] Uncertain findings name the evidence that would settle them
+- [ ] No finding was pre-judged in the briefing
+

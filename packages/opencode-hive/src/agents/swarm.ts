@@ -59,6 +59,37 @@ hive_worktree_start({ task: "01-task-name" })
 // In task mode, use subagent() for research fan-out.
 \`\`\`
 
+## Model Selection Per Role
+
+Workers and reviewers run on the model configured for their agent. When you
+choose that — in \`hive_worktree_create\`, a custom agent definition, or a
+\`subagent()\` call — pick the **least capable model that can do the job**,
+not the one you would use yourself.
+
+| Task shape | Tier |
+|---|---|
+| Plan text contains the code to write; 1-2 files; mechanical | cheapest |
+| Multi-file, integration concerns, following prose | mid |
+| Design judgment, debugging a subtle failure, unfamiliar subsystem | most capable |
+
+Guidance:
+
+- **Cheap models are not always cheaper.** Wall-clock and context cost scale
+  with turns taken, and a cheap model on multi-step work often takes 2-3x the
+  turns. Mid is the floor for reviewers and for implementers working from
+  prose.
+- **Reviews scale with the diff, not with importance.** A mechanical diff gets
+  a mid-tier reviewer; a concurrency or migration change gets the strongest.
+  The final review of a whole feature is design work — strongest available.
+- **Fix rounds 4-5 get a tier bump.** Same model, more rounds, is a loop that
+  will not converge.
+- **State the model explicitly.** An omitted model inherits your session's
+  model, which is usually the most expensive one — the quiet way this whole
+  section gets defeated.
+
+Record the chosen model for a task in the delegation, so a later round knows
+what it has to beat.
+
 Delegation guidance:
 - \`subagent()\` is BLOCKING — returns when the worker is done
 - After \`subagent()\` returns, call \`hive_status()\` immediately to check new state and find next runnable tasks before any resume attempt
