@@ -54,36 +54,69 @@ const ptySessions = new Map<string, {
   proc?: any;
   command: string;
   startedAt: Date;
+  /** Output seen so far. pty_read without clear drains it. */
+  buffer: string;
+  exited: boolean;
 }>();
 
 /**
  * Try to load bun-pty, checking auto-installed hive packages first.
+ *
+ * Returns the spawn function, normalised across the API shapes bun-pty has
+ * shipped: 0.3 exported `open(options)`, and every version from 0.4 on exports
+ * `spawn(file, args, options)`. Reading `.open` unconditionally made pty_start
+ * fail with "open2 is not a function" on any current install, which reads to a
+ * user as "this session has no shell".
  */
-async function loadBunPty(): Promise<any> {
+async function loadBunPty(): Promise<(file: string, args: string[], options: Record<string, unknown>) => any> {
   // Check hive auto-installed packages first
   const hiveModules = getHiveNodeModulesPath();
   const hivePkgPath = path.join(hiveModules, 'bun-pty');
-  
+
+  let mod: any;
   if (fs.existsSync(hivePkgPath)) {
-    return await import(hivePkgPath);
+    mod = await import(hivePkgPath);
+  } else {
+    // Fall back to normal module resolution via eval
+    // to bypass TypeScript static module resolution for non-declared deps
+    // eslint-disable-next-line no-eval
+    mod = await eval('import("bun-pty")');
   }
-  
-  // Fall back to normal module resolution via eval
-  // to bypass TypeScript static module resolution for non-declared deps
-  // eslint-disable-next-line no-eval
-  return await eval('import("bun-pty")');
+
+  return normaliseSpawn(mod);
+}
+
+/** Pick whichever spawn entry point this bun-pty build actually exports. */
+export function normaliseSpawn(mod: any): (file: string, args: string[], options: Record<string, unknown>) => any {
+  if (typeof mod?.spawn === 'function') return mod.spawn;
+  if (typeof mod?.open === 'function') {
+    const open = mod.open;
+    return (_file: string, _args: string[], options: Record<string, unknown>) => open(options);
+  }
+  throw new Error(
+    'bun-pty was loaded but exports neither spawn() nor open(); ' +
+      'reinstall with: npm i -g bun-pty@latest',
+  );
 }
 
 async function startPty(args: PtyStartArgs): Promise<string> {
   try {
-    const bunPty = await loadBunPty();
-    const open = bunPty.open;
-    
-    const pty = open({
-      command: args.command,
-      cwd: args.cwd,
-      env: args.env,
-    });
+    const spawn = await loadBunPty();
+
+    // bun-pty takes the executable and its argv separately. Route through a
+    // shell so a user's command string behaves like the one they typed.
+    const isWindows = process.platform === 'win32';
+    const pty = spawn(
+      isWindows ? (process.env.ComSpec ?? 'cmd.exe') : '/bin/sh',
+      isWindows ? ['/d', '/s', '/c', args.command] : ['-c', args.command],
+      {
+        cwd: args.cwd,
+        cols: 120,
+        rows: 30,
+        // bun-pty replaces the environment rather than extending it.
+        env: args.env ? { ...process.env, ...args.env } : process.env,
+      },
+    );
     
     const id = `pty-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     
@@ -91,12 +124,26 @@ async function startPty(args: PtyStartArgs): Promise<string> {
       proc: pty,
       command: args.command,
       startedAt: new Date(),
+      buffer: '',
+      exited: false,
     });
     
-    // Set up stdout/stderr readers
-    pty.on("data", (data: string) => {
-      // Store output - in a real implementation, this would be buffered
-      console.log(`[${id}] ${data}`);
+    // Keep the output. Without this, pty_read could only report "running" and
+    // the session that started a background process had no way to see it.
+    pty.onData?.((data: string) => {
+      const session = ptySessions.get(id);
+      if (!session) return;
+      session.buffer += data;
+      // Bound a chatty process: keep the tail, which is what a reader wants.
+      if (session.buffer.length > 200_000) {
+        session.buffer = session.buffer.slice(-200_000);
+      }
+    });
+    pty.onExit?.((event: { exitCode?: number }) => {
+      const session = ptySessions.get(id);
+      if (!session) return;
+      session.exited = true;
+      session.buffer += `\n[exit ${event?.exitCode ?? '?'}]\n`;
     });
     
     return `Started PTY session: ${id}
@@ -156,14 +203,19 @@ async function readPty(args: PtyReadArgs): Promise<string> {
     return `No PTY session found with id: ${args.id}. Use pty_list to see active sessions.`;
   }
   
-  // Note: In a real implementation, we'd buffer the output
-  // For now, return session status
+  const status = session.exited ? 'exited' : 'running';
+  const output = session.buffer;
+  if (args.clear) {
+    session.buffer = '';
+  }
+
   return `PTY Session: ${args.id}
 Command: ${session.command}
 Started: ${session.startedAt.toISOString()}
-Status: ${session.proc ? "running" : "stopped"}
-
-Note: Full output streaming requires bun-pty native module.`;
+Status: ${status}
+${output ? `\n${output}` : '\n(no output yet)'}${
+    args.clear ? '\n\n(buffer cleared)' : '\n\n(pass clear: true to drain this buffer)'
+  }`;
 }
 
 async function killPty(args: PtyKillArgs): Promise<string> {

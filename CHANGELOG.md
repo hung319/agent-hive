@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fix: `pty_start` always failed with "open2 is not a function"
+
+`pty_start` read `bunPty.open` and called it with an options object. bun-pty
+stopped exporting `open(options)` at 0.4 and exports `spawn(file, args, options)`
+instead, so on every current install the call threw. The error a user saw was:
+
+> `open2 is not a function. (In 'open2({ command: … })', 'open2' is undefined)`
+
+Read in a session where the agent then has no way to run commands, that reads as
+"this session has no shell", and agents reported exactly that. The `shell` tool
+itself was never affected — only this interactive-terminal tool.
+
+Now both shapes are accepted: `spawn` when exported, `open` as the legacy
+fallback, and a clear error naming `npm i -g bun-pty@latest` when a build exports
+neither. `pty_read` also returns the buffered output now; before, it reported
+only "running" and told the reader that streaming "requires the native module" —
+which looked like the same missing module twice, and made a started background
+process impossible to observe.
+
+Verified on the runtime: `pty_start` + `pty_read` returned `pty-ok-42`.
+
 ## [2.2.0] - 2026-10-25
 
 ### Skills and agent behaviour from an 8-source study
