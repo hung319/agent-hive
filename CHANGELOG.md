@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-10-26
+
+### `pty_read` and `pty_list` report what actually happened
+
+- `pty_read` cleared the buffer before checking whether it had anything, so
+  reading a still-starting process discarded whatever arrived in between. It now
+  drains only what it returned, and when there is nothing yet **and the process
+  is still running** it says `(still running; call pty_read again to collect
+  output)` — the previous `(no output yet)` alone read as "the command printed
+  nothing".
+- `pty_list` computed status from whether it held a process handle, which is
+  always true, so an exited session showed `Status: running`. It now reports
+  `exited`.
+- Four tests cover the buffer contract: re-read prompt, drain-only-when-output,
+  buffer kept without `clear`, exited status.
+
 ## [2.2.1] - 2026-10-26
 
 ### Fix: `pty_start` always failed with "open2 is not a function"

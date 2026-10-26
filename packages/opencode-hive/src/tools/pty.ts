@@ -48,16 +48,18 @@ export interface PtyListArgs {
   // No arguments needed
 }
 
-// Store for PTY sessions (in-memory, resets on restart)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ptySessions = new Map<string, {
+export interface PtySession {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   proc?: any;
   command: string;
   startedAt: Date;
-  /** Output seen so far. pty_read without clear drains it. */
+  /** Output seen so far. pty_read with clear drains it. */
   buffer: string;
   exited: boolean;
-}>();
+}
+
+// Store for PTY sessions (in-memory, resets on restart)
+export const ptySessions = new Map<string, PtySession>();
 
 /**
  * Try to load bun-pty, checking auto-installed hive packages first.
@@ -196,7 +198,7 @@ async function sendToPty(args: PtySendArgs): Promise<string> {
   }
 }
 
-async function readPty(args: PtyReadArgs): Promise<string> {
+export async function readPty(args: PtyReadArgs): Promise<string> {
   const session = ptySessions.get(args.id);
   
   if (!session) {
@@ -205,17 +207,31 @@ async function readPty(args: PtyReadArgs): Promise<string> {
   
   const status = session.exited ? 'exited' : 'running';
   const output = session.buffer;
-  if (args.clear) {
+  // Drain only what was returned. Clearing a buffer that was empty discards
+  // nothing, and clearing before the emptiness check would drop the first
+  // bytes a slow process wrote between the copy and the reset.
+  if (args.clear && output) {
     session.buffer = '';
   }
+
+  const next =
+    !args.clear
+      ? '\n\n(pass clear: true to drain this buffer)'
+      : output
+        ? '\n\n(buffer cleared)'
+        : '';
+  // A one-shot read of a still-starting process is the common failure: the
+  // caller sees "no output" and concludes the command produced nothing.
+  const waiting =
+    !output && !session.exited
+      ? '\n\n(still running; call pty_read again to collect output)'
+      : '';
 
   return `PTY Session: ${args.id}
 Command: ${session.command}
 Started: ${session.startedAt.toISOString()}
 Status: ${status}
-${output ? `\n${output}` : '\n(no output yet)'}${
-    args.clear ? '\n\n(buffer cleared)' : '\n\n(pass clear: true to drain this buffer)'
-  }`;
+${output ? `\n${output}` : '\n(no output yet)'}${waiting}${next}`;
 }
 
 async function killPty(args: PtyKillArgs): Promise<string> {
@@ -245,10 +261,13 @@ async function listPty(_args: PtyListArgs): Promise<string> {
   let output = "Active PTY Sessions:\n\n";
   
   for (const [id, session] of ptySessions) {
+    // A held proc is not proof of life. This listed "running" for processes
+    // that had long since exited, which reads as a leaked session.
+    const status = session.exited ? "exited" : "running";
     output += `ID: ${id}\n`;
     output += `Command: ${session.command}\n`;
     output += `Started: ${session.startedAt.toISOString()}\n`;
-    output += `Status: ${session.proc ? "running" : "stopped"}\n`;
+    output += `Status: ${status}\n`;
     output += "---\n";
   }
   
